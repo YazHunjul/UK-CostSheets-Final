@@ -3,6 +3,14 @@ import uuid
 
 key = uuid.uuid4()
 
+contacts = {
+    'Marc Byford' : '(07974 403322)',
+    'Karl Nicholson' : '(07791 397866)',
+    'Dan Butler' :  '(07703 729686)',
+    'Chris Mannus' : '(07870 263280)',
+    'Dean Griffiths' :  '(07814 784352)', 
+}
+
 def getInfo():
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -22,8 +30,15 @@ def getInfo():
         'projectName' : proj_name,
         'location' : location,
         'projectNum' : proj_num,
-        'salesContant' : sales_contact,
+        'salesContact' : f'{sales_contact} {contacts.get('sales_contact')}',
         'customer' : customer,
         'date' : date,
         'referenceNum' : reference_num,
     }
+    
+    
+    # Marc Byford (07974 403322)
+# Karl Nicholson (07791 397866)
+# Dan Butler (07703 729686)
+# Chris Mannus (07870 263280)
+# Dean Griffiths (07814 784352)                 David Stewart (07989 185991)          
