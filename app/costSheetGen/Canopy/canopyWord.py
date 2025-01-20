@@ -15,7 +15,7 @@ def generate_word(context, genInfo):
         BytesIO: The generated Word document as a BytesIO object.
     """
     # Path to the Word template
-    template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
+    template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
     
     # Load the Word template
     template = DocxTemplate(template_path)

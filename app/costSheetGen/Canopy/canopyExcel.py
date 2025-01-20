@@ -6,7 +6,7 @@ from io import BytesIO
 def generate_sheet(info, genInfo):
     try:
         # Load the existing workbook
-        wb = load_workbook('/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Cost Sheet R18.5 Sep 2024 (7).xlsx')
+        wb = load_workbook('app/costSheetGen/costSheetResources/Cost Sheet R18.5 Sep 2024 (7).xlsx')
         ws = wb['CANOPY']
 
         #Fill out General Information
