@@ -10,11 +10,11 @@ def main(genInfo):
     st.markdown("<h2 style='text-align: center;'>Canopy Cost Sheet</h2>", unsafe_allow_html=True)
     
     # Get Kitchen Count
-    num_kitchens = st.number_input("Enter Number of Kitchens", min_value=1, key='num_kitchens')
+    num_kitchens = st.number_input("Enter Number of Levels", min_value=1, key='num_kitchens')
     kitchen_info = []
 
     for i in range(num_kitchens):
-        kitchen_name = st.text_input(f"Enter Kitchen {i + 1} Name", key=f'kitchen_name_{i}')
+        kitchen_name = st.text_input(f"Enter Level {i + 1} Name", key=f'kitchen_name_{i}')
         if kitchen_name:
             # Create a dictionary for this kitchen
             kitchen_data = {
@@ -22,15 +22,15 @@ def main(genInfo):
                 "floors": []
             }
 
-            with st.expander(f'{kitchen_name.title()} Information', expanded=True):
+            with st.expander(f'{kitchen_name.title()} Floor Information', expanded=True):
                 num_floors = st.number_input(
-                    f"Enter the number of floors in {kitchen_name}", 
+                    f"Enter the number of areas in {kitchen_name} Floor", 
                     min_value=1, 
                     key=f'floors_input_{i}'
                 )
                 for floor in range(num_floors):
                     floor_name = st.text_input(
-                        f"Enter Floor {floor + 1} Name", 
+                        f"Enter area {floor + 1} Name", 
                         key=f'floor_name_{i}_{floor}'
                     )
                     if floor_name:
@@ -58,7 +58,7 @@ def main(genInfo):
                                 
                                 control_panel = st.selectbox('Select Control Panel', ['CP1S', 'CP2S', 'CP3S', 'CP4S'], key=f'CP_{i}_{floor}_{canopy}') if (model == 'CMWI' or model =='CMWF') else ''
                                 
-                                item_number = st.text_input('Item Number', key=f'itemNum_{i}_{floor}_{canopy}')
+                                item_number = st.text_input('Reference Number', key=f'itemNum_{i}_{floor}_{canopy}')
                                 
                                 flowrate = st.number_input('Entert Flow Rate', min_value=0.0, key=f'flowRate_{i}_{floor}_{canopy}')
                                 

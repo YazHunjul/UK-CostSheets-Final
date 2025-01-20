@@ -239,7 +239,7 @@ def get_wall_cladding(kitchen_info):
     for kitchen in kitchens:
         for floor in kitchen["floors"]:
             for canopy in floor["canopies"]:
-                exists = True if canopy.wallCladding else False
+                # exists = True if canopy.get('wallCladding') else False
                 item_number = canopy.get("itemNum", "Unknown")
                 width = canopy.get("cladding_width", 0)
                 height = canopy.get("cladding_height", 0)
@@ -250,7 +250,7 @@ def get_wall_cladding(kitchen_info):
                     "description": "Cladding to Rear, Left & Right-hand Walls",
                     "width": width,
                     "height": height,
-                    'exists' : exists
+                    # 'exists' : exists
                 })
 
     return wall_cladding_data
