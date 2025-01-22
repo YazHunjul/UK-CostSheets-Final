@@ -106,10 +106,10 @@ def main(genInfo):
                                     key=f'specialWorks_{i}_{floor}_{canopy}'
                                 )
                                 
-                                configuration = st.selectbox(
-                                    'Configuration', ['WALL', "ISLAND"], 
-                                    key=f'config_{i}_{floor}_{canopy}'
-                                )
+                                # configuration = st.selectbox(
+                                #     'Configuration', ['WALL', "ISLAND"], 
+                                #     key=f'config_{i}_{floor}_{canopy}'
+                                # )
                                 
                             with coll4:
                                 length = st.number_input(
