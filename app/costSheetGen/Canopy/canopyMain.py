@@ -52,7 +52,11 @@ def main(genInfo):
                             with coll1:
                                 item_number = st.text_input('Reference Number', key=f'itemNum_{i}_{floor}_{canopy}')
 
-                                
+                                model = st.selectbox(
+                                    'Model', 
+                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
+                                    key=f'model_{i}_{floor}_{canopy}'
+                                )
                                 
                                 control_panel = st.selectbox('Select Control Panel', ['CP1S', 'CP2S', 'CP3S', 'CP4S'], key=f'CP_{i}_{floor}_{canopy}') if (model == 'CMWI' or model =='CMWF') else ''
                                 
@@ -64,11 +68,6 @@ def main(genInfo):
                                 
                             with coll2:
                                 
-                                model = st.selectbox(
-                                    'Model', 
-                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
-                                    key=f'model_{i}_{floor}_{canopy}'
-                                )
 
                                 height = st.number_input(
                                     "Height", min_value=0,
