@@ -56,7 +56,11 @@ def main(genInfo):
                                     "Height", min_value=0,
                                     key=f'height_{i}_{floor}_{canopy}'
                                 )
-                                
+                                model = st.selectbox(
+                                    'Model', 
+                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
+                                    key=f'model_{i}_{floor}_{canopy}'
+                                )
                                 
                                 
                                 control_panel = st.selectbox('Select Control Panel', ['CP1S', 'CP2S', 'CP3S', 'CP4S'], key=f'CP_{i}_{floor}_{canopy}') if (model == 'CMWI' or model =='CMWF') else ''
@@ -88,12 +92,6 @@ def main(genInfo):
                                 )
                                 
                             with coll3:
-                                
-                                model = st.selectbox(
-                                    'Model', 
-                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
-                                    key=f'model_{i}_{floor}_{canopy}'
-                                )
 
                                 width = st.number_input(
                                     "Width", min_value=0,
