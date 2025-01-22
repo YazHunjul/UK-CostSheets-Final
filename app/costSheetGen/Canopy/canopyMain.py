@@ -81,7 +81,7 @@ def main(genInfo):
                                 WW_pods = st.selectbox("W/W Pods", ['1000-S', '1500-S', '2000-S', '2500-S', '3000-S', '1000-D', '1500-D', '2000-D', '2000-D', '2500-D', '3000-D'], key=f'WW_{i}_{floor}_{canopy}') if (model == 'CMWI' or model =='CMWF') else ''
                                 light_selection = st.selectbox(
                                     'Light Selection',
-                                    ['LED STRIP L6 Inc DALI', 'LED STRIP L12 inc DALI', 'LED STRIP L18 Inc DALI', 'Small LED Spots inc DALI', 'LARGE LED Spots inc DALI'],
+                                    ['','LED STRIP L6 Inc DALI', 'LED STRIP L12 inc DALI', 'LED STRIP L18 Inc DALI', 'Small LED Spots inc DALI', 'LARGE LED Spots inc DALI'],
                                     key=f'light_{i}_{floor}_{canopy}'
                                 )
                                 
