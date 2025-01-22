@@ -67,7 +67,12 @@ def main(genInfo):
                     
                                 
                             with coll2:
-                                l = st.text_input('')
+                                
+                                model = st.selectbox(
+                                    'Model', 
+                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
+                                    key=f'model_{i}_{floor}_{canopy}'
+                                )
 
                                 height = st.number_input(
                                     "Height", min_value=0,
@@ -88,11 +93,7 @@ def main(genInfo):
                                 )
                                 
                             with coll3:
-                                model = st.selectbox(
-                                    'Model', 
-                                    ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
-                                    key=f'model_{i}_{floor}_{canopy}'
-                                )
+                             
                                 width = st.number_input(
                                     "Width", min_value=0,
                                     key=f'width_{i}_{floor}_{canopy}'
