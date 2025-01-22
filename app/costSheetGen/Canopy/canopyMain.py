@@ -57,6 +57,10 @@ def main(genInfo):
                                     ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
                                     key=f'model_{i}_{floor}_{canopy}'
                                 )
+                                height = st.number_input(
+                                    "Height", min_value=0,
+                                    key=f'height_{i}_{floor}_{canopy}'
+                                )
                                 
                                 control_panel = st.selectbox('Select Control Panel', ['CP1S', 'CP2S', 'CP3S', 'CP4S'], key=f'CP_{i}_{floor}_{canopy}') if (model == 'CMWI' or model =='CMWF') else ''
                                 
@@ -67,10 +71,11 @@ def main(genInfo):
                     
                                 
                             with coll2:
-                                height = st.number_input(
-                                    "Height", min_value=0,
-                                    key=f'height_{i}_{floor}_{canopy}'
+                                configuration = st.selectbox(
+                                    'Configuration', ['WALL', "ISLAND"], 
+                                    key=f'config_{i}_{floor}_{canopy}'
                                 )
+                                
                                 
                                 section = st.number_input(
                                     'Sections', 
