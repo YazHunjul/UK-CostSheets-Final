@@ -67,7 +67,6 @@ def main(genInfo):
                     
                                 
                             with coll2:
-                                l = st.text_input('')
                                 height = st.number_input(
                                     "Height", min_value=0,
                                     key=f'height_{i}_{floor}_{canopy}'
@@ -87,7 +86,6 @@ def main(genInfo):
                                 )
                                 
                             with coll3:
-                                l = st.text_input('')
                                 width = st.number_input(
                                     "Width", min_value=0,
                                     key=f'width_{i}_{floor}_{canopy}'
@@ -107,7 +105,6 @@ def main(genInfo):
                                 )
                                 
                             with coll4:
-                                l = st.text_input('')
                                 length = st.number_input(
                                     "Length", min_value=0,
                                     key=f'length_{i}_{floor}_{canopy}'
