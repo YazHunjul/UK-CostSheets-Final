@@ -30,7 +30,7 @@ def getInfo():
         'projectName' : proj_name,
         'location' : location,
         'projectNum' : proj_num,
-        'salesContact' : f'{sales_contact} {contacts.get('sales_contact')}',
+        'salesContact' : f'{sales_contact} {contacts.get(sales_contact, "")}',
         'customer' : customer,
         'date' : date,
         'referenceNum' : reference_num,
