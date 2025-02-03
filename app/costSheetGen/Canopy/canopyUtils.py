@@ -1,14 +1,9 @@
-import openpyxl
-import math
 import streamlit as st
+import openpyxl
 import os
-import pandas as pd
-from os import path
-from xlcalculator import ModelCompiler
-from xlcalculator import Model
-from xlcalculator import Evaluator
-import xlwings as xw
 from io import BytesIO
+import math
+import pandas as pd
 
 def extract_canopy_prices(excel_file):
     """Extract prices from Excel file"""
