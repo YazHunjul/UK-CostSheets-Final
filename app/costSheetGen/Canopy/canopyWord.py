@@ -393,28 +393,38 @@ def generate_email_summary(genInfo, kitchen_info, scope_work):
         # Try to get API key from different locations
         api_key = None
         
-        # Try to load from possible locations silently
-        possible_paths = [
-            '.streamlit/secrets.toml',
-            'app/.streamlit/secrets.toml',
-            '../.streamlit/secrets.toml',
-            '../../.streamlit/secrets.toml',
-            '/Users/yazan/.streamlit/secrets.toml',
-            '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/.streamlit/secrets.toml'
-        ]
-        
-        for path in possible_paths:
-            try:
-                if os.path.exists(path):
-                    secrets = toml.load(path)
-                    if 'api_keys' in secrets and 'deepseek' in secrets['api_keys']:
-                        api_key = secrets['api_keys']['deepseek']
-                        break
-            except:
-                continue
+        # Try environment variable first
+        api_key = os.environ.get('DEEPSEEK_API_KEY')
         
         if not api_key:
-            st.error("Please configure your API key in .streamlit/secrets.toml")
+            # List of possible paths for secrets.toml
+            possible_paths = [
+                '.streamlit/secrets.toml',
+                'app/.streamlit/secrets.toml',
+                '../.streamlit/secrets.toml',
+                '../../.streamlit/secrets.toml',
+                os.path.expanduser('~/.streamlit/secrets.toml'),
+                os.path.join(os.getcwd(), '.streamlit/secrets.toml')
+            ]
+            
+            for path in possible_paths:
+                try:
+                    if os.path.exists(path):
+                        st.write(f"Found secrets file at: {path}")  # Debug output
+                        secrets = toml.load(path)
+                        if 'api_keys' in secrets and 'deepseek' in secrets['api_keys']:
+                            api_key = secrets['api_keys']['deepseek']
+                            break
+                except Exception as e:
+                    st.write(f"Error loading {path}: {str(e)}")  # Debug output
+                    continue
+        
+        if not api_key:
+            st.error("""
+            API key not found. Please ensure one of the following:
+            1. Create .streamlit/secrets.toml with your API key
+            2. Set DEEPSEEK_API_KEY environment variable
+            """)
             return None
         
         # Construct the project summary
