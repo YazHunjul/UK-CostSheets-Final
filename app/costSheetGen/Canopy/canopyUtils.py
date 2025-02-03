@@ -3,7 +3,6 @@ import math
 import streamlit as st
 import os
 import pandas as pd
-import formulas
 from os import path
 from xlcalculator import ModelCompiler
 from xlcalculator import Model
@@ -11,70 +10,53 @@ from xlcalculator import Evaluator
 import xlwings as xw
 from io import BytesIO
 
-def extract_canopy_prices(excel_path):
-    """
-    Extract price from cell P12 in the Excel file.
-    """
+def extract_canopy_prices(excel_file):
+    """Extract prices from Excel file"""
     try:
-        if not os.path.exists(excel_path):
-            st.error(f"Excel file not found: {excel_path}")
-            return []
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        ws = wb['CANOPY']
         
-        # Load workbook
-        wb = openpyxl.load_workbook(excel_path)
-        sheet = wb.active
+        # Get prices
+        prices = {}
+        current_row = 12
         
-        # Get the value from P12
-        total_value = sheet['P12'].value
-        
-        if total_value is not None:
-            # Convert to float if it's a string
-            if isinstance(total_value, str):
-                try:
-                    total_value = float(total_value.replace(',', ''))
-                except ValueError:
-                    st.warning(f"Could not convert value '{total_value}' to number")
-                    return []
+        while ws[f'C{current_row}'].value:  # While there's an item number
+            item_num = ws[f'C{current_row}'].value
+            model = ws[f'D{current_row + 2}'].value
             
-            # Round up to nearest integer
-            if isinstance(total_value, (int, float)):
-                rounded_value = math.ceil(total_value)
-                return [{
-                    'canopy_number': 1,
-                    'total_price': rounded_value
-                }]
+            # Get canopy price
+            price = ws[f'P{current_row}'].value
+            if price:
+                prices[item_num] = float(f"{math.ceil(float(price))}.00")
+            
+            # Get cladding price if exists
+            cladding_price = ws[f'N{current_row + 7}'].value
+            if cladding_price:
+                prices[f"{item_num}_cladding"] = float(f"{math.ceil(float(cladding_price))}.00")
+            
+            # Get UV price if it's a UV model
+            if model and 'UV' in str(model):
+                uv_price = ws[f'N{current_row + 12}'].value
+                if uv_price:
+                    prices[f"{item_num}_uv"] = float(f"{math.ceil(float(uv_price))}.00")
+            
+            current_row += 17
         
-        wb.close()
-        return []
+        return prices
         
     except Exception as e:
-        st.error(f"Error extracting price: {str(e)}")
-        return []
+        st.error(f"Error extracting prices: {str(e)}")
+        return None
 
-def convert_formulas_to_values(excel_path):
-    """
-    Opens Excel file and runs the ConvertFormulasToValues macro
-    """
+def convert_formulas_to_values(excel_file):
+    """Convert formulas to values in Excel file"""
     try:
-        # Create Excel application object
-        excel = win32com.client.Dispatch("Excel.Application")
-        excel.Visible = False  # Run in background
-        
-        # Open workbook
-        wb = excel.Workbooks.Open(excel_path)
-        
-        # Run the macro
-        excel.Run("ConvertFormulasToValues")
-        
-        # Save and close
-        wb.Save()
-        wb.Close()
-        excel.Quit()
-        
+        # Load workbook with data_only=True to get values
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        return wb
     except Exception as e:
-        print(f"Error converting formulas: {str(e)}")
-        if 'excel' in locals():
-            excel.Quit()
+        st.error(f"Error converting formulas: {str(e)}")
+        return None
 
 def get_excel_calculated_values(excel_path):
     """
@@ -115,41 +97,20 @@ def get_excel_calculated_values(excel_path):
         print(f"At path: {excel_path}")
         return None
 
-def run_excel_script(excel_path, macro_name=None):
-    """
-    Reads N12 calculated value and pastes to P12
-    """
+def run_excel_script(excel_file):
+    """Run Excel script to update values"""
     try:
-        st.write("Processing Excel file...")
+        # Load workbook
+        wb = openpyxl.load_workbook(excel_file)
+        ws = wb['CANOPY']
         
-        # Read Excel file with pandas to get calculated values
-        df = pd.read_excel(excel_path, sheet_name='CANOPY', header=None)
-        
-        # N12 is at row 11, column 13 (0-based indexing)
-        n12_value = df.iloc[11, 13]  # This will get the calculated value
-        st.write(f"Read calculated value from N12: {n12_value}")
-        
-        if not pd.isna(n12_value):  # Check if value exists
-            # Load workbook to write the value
-            wb = openpyxl.load_workbook(excel_path)
-            sheet = wb['CANOPY']
-            
-            # Write the calculated value to P12
-            sheet['P12'].value = float(n12_value)
-            st.write(f"Wrote value to P12: {n12_value}")
-            
-            # Save workbook
-            wb.save(excel_path)
-            wb.close()
-            
-            return float(n12_value)
-            
-        else:
-            st.warning("No value found in N12")
-            return None
-        
+        # Save and return
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return output
     except Exception as e:
-        st.error(f"Error processing Excel file: {str(e)}")
+        st.error(f"Error running Excel script: {str(e)}")
         return None
 
 def convert_to_macro_enabled(excel_bytes):
