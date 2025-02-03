@@ -11,7 +11,7 @@ def generate_sheet(kitchen_info, genInfo, delivery_install_data):
     """
     try:
         # Load the workbook
-        wb = load_workbook('app/costSheetGen/costSheetResources/costSheetTest.xlsx')
+        wb = load_workbook('app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx')
         ws = wb['CANOPY']
 
         # Fill out General Information
