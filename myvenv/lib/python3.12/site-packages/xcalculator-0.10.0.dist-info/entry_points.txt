@@ -1,0 +1,3 @@
+[gui_scripts]
+xcalc = xcalculator.main:main
+xcalculator = xcalculator.main:main

@@ -2,32 +2,37 @@ from openpyxl import load_workbook
 import streamlit as st
 import io
 import os
+import openpyxl
+from io import BytesIO
 
-def generate_sheet(info, genInfo):
+def generate_sheet(kitchen_info, genInfo, delivery_install_data):
+    """
+    Generate an Excel sheet based on kitchen information and return it as a BytesIO object.
+    """
     try:
         # Load the workbook
-        wb = load_workbook('/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Cost Sheet R18.5 Sep 2024 (7).xlsx')
+        wb = load_workbook('app/costSheetGen/costSheetResources/costSheetTest.xlsx')
         ws = wb['CANOPY']
 
         # Fill out General Information
         ws['C3'] = genInfo.get('projectNum').title()
         ws['C5'] = genInfo.get('customer').title()
-        ws['C7'] = genInfo.get('salesContact').title()
+        ws['C7'] = genInfo.get('combined_initials')
         ws['G3'] = genInfo.get('projectName').title()
         ws['G5'] = genInfo.get('location').title()
         ws['G7'] = genInfo.get('date')
         
-        # Fill in the rest of your data without modifying any formulas
+        # Fill in canopy data
         itemNum = 12
         canopyInfo = 14
         lights = 15
         specialWorks = itemNum + 5
         wallCladding = itemNum + 7
-        control_panel = itemNum + 9
-        ww_pods = itemNum + 10
-        pipework = itemNum + 11
+        control_panel = itemNum + 13
+        ww_pods = itemNum + 14
+        pipework = itemNum + 15
 
-        for kitchen in info:
+        for kitchen in kitchen_info:
             for floor in kitchen['floors']:
                 for canopy in floor['canopies']:
                     ws[f'C{itemNum}'] = canopy.get('itemNum')
@@ -48,9 +53,12 @@ def generate_sheet(info, genInfo):
                         ws[f'D{current_row}'] = qty
                     
                     ws[f'C{wallCladding}'] = "2M² (HFL)" if canopy.get('wallCladding') else ''
+                    if canopy.get('wallCladding') is None:
+                        ws[f'D{wallCladding}'] = 0 
                     
                     ws[f'C{control_panel}'] = canopy.get('control_panel') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
                     ws[f'C{ww_pods}'] = canopy.get('WW_pods') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
+                    ws[f'D{ww_pods}'] = canopy.get('WW_pods_quantity') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
                     ws[f'C{pipework}'] = canopy.get('pipework') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
                     
                     itemNum += 17
@@ -62,19 +70,35 @@ def generate_sheet(info, genInfo):
                     ww_pods += 17
                     pipework += 17
 
-        # First save to a real file to ensure Excel can calculate it
-        temp_path = "temp_for_calc.xlsx"
-        wb.save(temp_path)
+        # Fill delivery and installation data
+        ws['D183'] = delivery_install_data['delivery_location']
+        ws['C183'] = delivery_install_data['delivery_lift_qty']
         
-        # Now read it back with data_only=True
-        wb_data = load_workbook(temp_path)
-        
+        if delivery_install_data['plant_hires']:
+            if "Plant Hire 1" in delivery_install_data['plant_hires']:
+                ws['D184'] = delivery_install_data['plant_hires']["Plant Hire 1"]
+                ws['C184'] = delivery_install_data['quantities'].get("Plant Hire 1", 0)
+            if "Plant Hire 2" in delivery_install_data['plant_hires']:
+                ws['D185'] = delivery_install_data['plant_hires']["Plant Hire 2"]
+                ws['C185'] = delivery_install_data['quantities'].get("Plant Hire 2", 0)
+
+        ws['C187'] = delivery_install_data['strip_out']
+        ws['C188'] = delivery_install_data['consumables']
+        ws['C189'] = delivery_install_data['installation_normal']
+        ws['C190'] = delivery_install_data['installation_after']
+        ws['C191'] = delivery_install_data['wall_cladding']
+        ws['C192'] = delivery_install_data['overnight_expenses']
+        ws['C193'] = delivery_install_data['test_commission']
+        ws['C194'] = delivery_install_data['gas_interlock']
+        ws['C195'] = delivery_install_data['co_sensor']
+        ws['C196'] = delivery_install_data['co2_sensor']
+        ws['C197'] = delivery_install_data['bms_interface']
+
         # Save to BytesIO for return
         output = io.BytesIO()
-        wb_data.save(output)
-        
-        # Clean up temp file
-        os.remove(temp_path)
+        wb.save(output)
+        output.seek(0)
+        wb.close()
         
         return output
 
