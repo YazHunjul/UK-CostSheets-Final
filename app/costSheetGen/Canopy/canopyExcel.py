@@ -4,97 +4,162 @@ import io
 import os
 import openpyxl
 from io import BytesIO
+from openpyxl.styles import Font, PatternFill, Border, Side
+from openpyxl.formatting.rule import CellIsRule
 
-def generate_sheet(kitchen_info, genInfo, delivery_install_data):
+def generate_sheet(kitchen_info, genInfo):
     """
     Generate an Excel sheet based on kitchen information and return it as a BytesIO object.
     """
     try:
         # Load the workbook
-        wb = load_workbook('app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx')
-        ws = wb['CANOPY']
-
-        # Fill out General Information
-        ws['C3'] = genInfo.get('projectNum').title()
-        ws['C5'] = genInfo.get('customer').title()
-        ws['C7'] = genInfo.get('combined_initials')
-        ws['G3'] = genInfo.get('projectName').title()
-        ws['G5'] = genInfo.get('location').title()
-        ws['G7'] = genInfo.get('date')
+        excel_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx'
+        wb = load_workbook(excel_path)
         
-        # Fill in canopy data
-        itemNum = 12
-        canopyInfo = 14
-        lights = 15
-        specialWorks = itemNum + 5
-        wallCladding = itemNum + 7
-        control_panel = itemNum + 13
-        ww_pods = itemNum + 14
-        pipework = itemNum + 15
-
+        # Keep a clean template
+        template_ws = wb['CANOPY']
+        clean_template = wb.copy_worksheet(template_ws)
+        clean_template.title = 'TEMPLATE_TEMP'
+        
+        # Write general info to main CANOPY sheet
+        template_ws['C3'] = genInfo.get('projectNum', '').title()
+        template_ws['C5'] = genInfo.get('customer', '').title()
+        template_ws['C7'] = genInfo.get('combined_initials', '')
+        template_ws['G3'] = genInfo.get('projectName', '').title()
+        template_ws['G5'] = genInfo.get('location', '').title()
+        template_ws['G7'] = genInfo.get('date', '')
+        
+        # First write all data to main CANOPY sheet
+        current_row = 12
+        
         for kitchen in kitchen_info:
-            for floor in kitchen['floors']:
-                for canopy in floor['canopies']:
-                    ws[f'C{itemNum}'] = canopy.get('itemNum')
-                    ws[f'D{canopyInfo}'] = canopy.get('model')
-                    ws[f'E{canopyInfo}'] = canopy.get('width')
-                    ws[f'F{canopyInfo}'] = canopy.get('length')
-                    ws[f'G{canopyInfo}'] = canopy.get('height')
-                    ws[f'H{canopyInfo}'] = canopy.get('section')
-                    ws[f'I{canopyInfo}'] = canopy.get('flowrate')
+            for floor in kitchen.get('floors', []):
+                for canopy in floor.get('canopies', []):
+                    # Write to main CANOPY sheet
+                    template_ws[f'C{current_row + 2}'] = canopy.get('configuration', '')
+                    template_ws[f'C{current_row}'] = canopy.get('itemNum', '')
+                    template_ws[f'D{current_row + 2}'] = canopy.get('model', '')
+                    template_ws[f'E{current_row + 2}'] = canopy.get('width', '')
+                    template_ws[f'F{current_row + 2}'] = canopy.get('length', '')
+                    template_ws[f'G{current_row + 2}'] = canopy.get('height', '')
+                    template_ws[f'H{current_row + 2}'] = canopy.get('section', '')
+                    template_ws[f'I{current_row + 2}'] = canopy.get('flowrate', '')
                     
-                    ws[f'C{lights}'] = canopy.get('lights')
-                    ws[f'D{lights}'] = canopy.get('light_quantity')
+                    template_ws[f'C{current_row + 3}'] = canopy.get('lights', '')
+                    template_ws[f'D{current_row + 3}'] = canopy.get('light_quantity', '')
+                    
+                    # Special works
+                    special_works_dict = canopy.get('specialWorks', {})
+                    for i, (work, qty) in enumerate(list(special_works_dict.items())[:2]):
+                        template_ws[f'C{current_row + 5 + i}'] = work
+                        template_ws[f'D{current_row + 5 + i}'] = qty
+                    
+                    # Wall cladding
+                    template_ws[f'C{current_row + 7}'] = "2M² (HFL)" if canopy.get('wallCladding') else ''
+                    
+                    # CMWI/CMWF specific fields
+                    if canopy.get('model') in ['CMWI', 'CMWF']:
+                        template_ws[f'C{current_row + 13}'] = canopy.get('control_panel', '')
+                        template_ws[f'C{current_row + 14}'] = canopy.get('WW_pods', '')
+                        template_ws[f'D{current_row + 14}'] = canopy.get('WW_pods_quantity', '')
+                        template_ws[f'C{current_row + 15}'] = canopy.get('pipework', '')
+                    
+                    current_row += 17
+        
+        # Now create individual floor sheets from clean template
+        for kitchen in kitchen_info:
+            kitchen_name = kitchen.get('kitchen_name', 'Unknown').title()
+            
+            for floor in kitchen.get('floors', []):
+                floor_name = floor.get('floor_name', 'Unknown').title()
+                sheet_name = f"CANOPY - {floor_name} ({kitchen_name})"[:31]
+                
+                new_sheet = wb.copy_worksheet(clean_template)
+                new_sheet.title = sheet_name
+                
+                # Add conditional formatting
+                light_blue_fill = PatternFill(
+                    start_color='DEF2F7',  # RGB(222, 237, 242)
+                    end_color='DEF2F7',
+                    fill_type='solid'
+                )
+                
+                dark_blue_font = Font(
+                    color='9FCBDA'  # RGB(159, 203, 218)
+                )
+                
+                for start_row in range(14, 200, 17):
+                    for col in ['J', 'K', 'N', 'O']:
+                        cell_range = f"{col}{start_row}:{col}{start_row + 13}"
+                        rule = CellIsRule(
+                            operator='greaterThan',
+                            formula=['0'],
+                            stopIfTrue=True,
+                            fill=light_blue_fill,
+                            font=dark_blue_font
+                        )
+                        new_sheet.conditional_formatting.add(cell_range, rule)
+                
+                # Fill general info
+                new_sheet['C3'] = genInfo.get('projectNum', '').title()
+                new_sheet['C5'] = genInfo.get('customer', '').title()
+                new_sheet['C7'] = genInfo.get('combined_initials', '')
+                new_sheet['G3'] = genInfo.get('projectName', '').title()
+                new_sheet['G5'] = genInfo.get('location', '').title()
+                new_sheet['G7'] = genInfo.get('date', '')
+                
+                # Fill only this floor's data
+                current_row = 12
+                for canopy in floor.get('canopies', []):
+                    new_sheet[f'C{current_row + 2}'] = canopy.get('configuration', '')
+                    new_sheet[f'C{current_row}'] = canopy.get('itemNum', '')
+                    new_sheet[f'D{current_row + 2}'] = canopy.get('model', '')
+                    new_sheet[f'E{current_row + 2}'] = canopy.get('width', '')
+                    new_sheet[f'F{current_row + 2}'] = canopy.get('length', '')
+                    new_sheet[f'G{current_row + 2}'] = canopy.get('height', '')
+                    new_sheet[f'H{current_row + 2}'] = canopy.get('section', '')
+                    new_sheet[f'I{current_row + 2}'] = canopy.get('flowrate', '')
+                    
+                    new_sheet[f'C{current_row + 3}'] = canopy.get('lights', '')
+                    new_sheet[f'D{current_row + 3}'] = canopy.get('light_quantity', '')
                     
                     special_works_dict = canopy.get('specialWorks', {})
                     for i, (work, qty) in enumerate(list(special_works_dict.items())[:2]):
-                        current_row = specialWorks + i
-                        ws[f'C{current_row}'] = work
-                        ws[f'D{current_row}'] = qty
+                        new_sheet[f'C{current_row + 5 + i}'] = work
+                        new_sheet[f'D{current_row + 5 + i}'] = qty
                     
-                    ws[f'C{wallCladding}'] = "2M² (HFL)" if canopy.get('wallCladding') else ''
-                    if canopy.get('wallCladding') is None:
-                        ws[f'D{wallCladding}'] = 0 
+                    new_sheet[f'C{current_row + 7}'] = "2M² (HFL)" if canopy.get('wallCladding') else ''
                     
-                    ws[f'C{control_panel}'] = canopy.get('control_panel') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
-                    ws[f'C{ww_pods}'] = canopy.get('WW_pods') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
-                    ws[f'D{ww_pods}'] = canopy.get('WW_pods_quantity') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
-                    ws[f'C{pipework}'] = canopy.get('pipework') if canopy.get('model') in ['CMWI', 'CMWF'] else ''
+                    if canopy.get('model') in ['CMWI', 'CMWF']:
+                        new_sheet[f'C{current_row + 13}'] = canopy.get('control_panel', '')
+                        new_sheet[f'C{current_row + 14}'] = canopy.get('WW_pods', '')
+                        new_sheet[f'D{current_row + 14}'] = canopy.get('WW_pods_quantity', '')
+                        new_sheet[f'C{current_row + 15}'] = canopy.get('pipework', '')
                     
-                    itemNum += 17
-                    canopyInfo += 17
-                    lights += 17
-                    specialWorks = itemNum + 5
-                    wallCladding += 17
-                    control_panel += 17
-                    ww_pods += 17
-                    pipework += 17
+                    current_row += 17
+                
+                # Fill floor-specific delivery data from the floor's own data
+                delivery_data = floor.get('delivery_install_data', {})
+                
+                # Only write to input cells, preserve calculation cells
+                new_sheet['D183'] = delivery_data.get('delivery_location', '')  # Location (input)
+                new_sheet['C183'] = delivery_data.get('delivery_lift_qty', '')  # Quantity (input)
+                
+                if delivery_data.get('plant_hires'):
+                    if "Plant Hire 1" in delivery_data['plant_hires']:
+                        new_sheet['D184'] = delivery_data['plant_hires']["Plant Hire 1"]  # Plant type (input)
+                        new_sheet['C184'] = delivery_data['quantities'].get("Plant Hire 1", 0)  # Quantity (input)
+                    if "Plant Hire 2" in delivery_data['plant_hires']:
+                        new_sheet['D185'] = delivery_data['plant_hires']["Plant Hire 2"]  # Plant type (input)
+                        new_sheet['C185'] = delivery_data['quantities'].get("Plant Hire 2", 0)  # Quantity (input)
 
-        # Fill delivery and installation data
-        ws['D183'] = delivery_install_data['delivery_location']
-        ws['C183'] = delivery_install_data['delivery_lift_qty']
+                # Don't overwrite calculation cells C187-C197
+                # These cells contain formulas that should be preserved
+                
+        # Remove temporary template
+        wb.remove(clean_template)
         
-        if delivery_install_data['plant_hires']:
-            if "Plant Hire 1" in delivery_install_data['plant_hires']:
-                ws['D184'] = delivery_install_data['plant_hires']["Plant Hire 1"]
-                ws['C184'] = delivery_install_data['quantities'].get("Plant Hire 1", 0)
-            if "Plant Hire 2" in delivery_install_data['plant_hires']:
-                ws['D185'] = delivery_install_data['plant_hires']["Plant Hire 2"]
-                ws['C185'] = delivery_install_data['quantities'].get("Plant Hire 2", 0)
-
-        ws['C187'] = delivery_install_data['strip_out']
-        ws['C188'] = delivery_install_data['consumables']
-        ws['C189'] = delivery_install_data['installation_normal']
-        ws['C190'] = delivery_install_data['installation_after']
-        ws['C191'] = delivery_install_data['wall_cladding']
-        ws['C192'] = delivery_install_data['overnight_expenses']
-        ws['C193'] = delivery_install_data['test_commission']
-        ws['C194'] = delivery_install_data['gas_interlock']
-        ws['C195'] = delivery_install_data['co_sensor']
-        ws['C196'] = delivery_install_data['co2_sensor']
-        ws['C197'] = delivery_install_data['bms_interface']
-
-        # Save to BytesIO for return
+        # Save workbook
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)

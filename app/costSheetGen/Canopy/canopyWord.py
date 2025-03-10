@@ -23,7 +23,7 @@ def generate_word(context, genInfo):
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
         # Path to the Word template
-        template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
+        template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
         
         # Load the Word template
         template = DocxTemplate(template_path)
@@ -59,43 +59,9 @@ def generate_word(context, genInfo):
 
         print("DEBUG - Final genInfo:", genInfo)  # Debug print
 
-        # Calculate totals for each floor and kitchen
-        kitchen_totals = {}
-        grand_total = 0
-        
-        for kitchen_name, floors in grouped_canopy_data.items():
-            kitchen_total = 0
-            for floor_name, floor_data in floors.items():
-                floor_total = 0
-                cladding_total = 0
-                has_uv = False
-                
-                # Calculate floor totals
-                for canopy in floor_data['canopies']:
-                    if 'total_price' in canopy:
-                        floor_total += canopy['total_price']
-                    if canopy.get('wallCladding'):
-                        cladding_total += 3520.00  # Price per cladding
-                    if 'UV' in canopy.get('model', ''):
-                        has_uv = True
-                
-                # Add delivery and commissioning to floor total
-                floor_total += 13863.00  # Example delivery price
-                floor_total += 1502.00   # Example commissioning price
-                
-                # Add UV-c price if applicable
-                if has_uv:
-                    floor_total += 1040.00
-                
-                # Store totals in floor data
-                floor_data['floor_total'] = floor_total
-                floor_data['cladding_total'] = cladding_total
-                
-                # Add to kitchen total
-                kitchen_total += floor_total + cladding_total
-            
-            kitchen_totals[kitchen_name] = kitchen_total
-            grand_total += kitchen_total
+        # Use the kitchen_totals passed from canopyMain.py
+        kitchen_totals = context.get('kitchen_totals', {})
+        grand_total = sum(kitchen_totals.values())
 
         # Add pricing information to genInfo
         genInfo.update({
@@ -103,9 +69,13 @@ def generate_word(context, genInfo):
             'commissioning_price': 1502.00,
             'uvc_price': 1040.00,
             'cladding_price': 3520.00,
-            'kitchen_totals': kitchen_totals,
+            'kitchen_totals': kitchen_totals,  # Use the N9 sums from canopyMain
             'grand_total': grand_total
         })
+
+        # Debug the totals
+        print("Kitchen totals from N9:", kitchen_totals)
+        print("Grand total:", grand_total)
 
         # Render the template with the given context
         template.render(genInfo)
