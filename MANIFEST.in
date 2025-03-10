@@ -1,0 +1,2 @@
+include app/costSheetGen/costSheetResources/*.xlsx
+include app/costSheetGen/costSheetResources/*.docx 

@@ -1,14 +1,19 @@
 import os
 import streamlit as st
+from pkg_resources import resource_filename
 
-# Get template paths from Streamlit secrets or use defaults
+# Get template paths using pkg_resources
 TEMPLATES = {
-    'EXCEL': st.secrets.get('EXCEL_TEMPLATE_PATH', 
-        '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx'),
-    'WORD': st.secrets.get('WORD_TEMPLATE_PATH',
-        '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx')
+    'EXCEL': resource_filename('app.costSheetGen.costSheetResources', 'Halton Cost Sheet Jan 2025.xlsx'),
+    'WORD': resource_filename('app.costSheetGen.costSheetResources', 'costSheet_canopy.docx')
 }
 
 # Debug output
-print("EXCEL path:", TEMPLATES['EXCEL'])
-print("WORD path:", TEMPLATES['WORD']) 
+st.write("EXCEL path:", TEMPLATES['EXCEL'])
+st.write("WORD path:", TEMPLATES['WORD'])
+
+# Verify files exist
+if not os.path.exists(TEMPLATES['EXCEL']):
+    st.error(f"Excel template not found! Looking in: {TEMPLATES['EXCEL']}")
+if not os.path.exists(TEMPLATES['WORD']):
+    st.error(f"Word template not found! Looking in: {TEMPLATES['WORD']}") 
