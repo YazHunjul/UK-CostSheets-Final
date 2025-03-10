@@ -23,7 +23,7 @@ def generate_word(context, genInfo):
         ref_num = genInfo.get('projectNum', '')
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
-        template_path = TEMPLATES['WORD']
+        template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")

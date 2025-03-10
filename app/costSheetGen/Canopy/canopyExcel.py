@@ -13,7 +13,7 @@ def generate_sheet(kitchen_info, genInfo):
     """
     try:
         # Load the workbook
-        excel_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx'
+        excel_path = 'app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx'
         wb = load_workbook(excel_path)
         
         # Keep a clean template
