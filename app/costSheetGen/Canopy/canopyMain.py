@@ -904,6 +904,17 @@ def fill_dummy_kitchen_data():
     st.session_state['cladding_desc'] = ["Rear", "Left"]
 
 def canopy_main():
+    # Get the absolute path to the resources directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    resources_dir = os.path.join(current_dir, '..', 'costSheetResources', 'templates')
+    
+    # Use the path for loading the Excel template
+    excel_template_path = os.path.join(resources_dir, 'Halton Cost Sheet Jan 2025.xlsx')
+    
+    if not os.path.exists(excel_template_path):
+        st.error(f"Excel template not found at: {excel_template_path}")
+        return
+    
     st.title("Canopy Cost Sheet Generator")
     
     # Add dummy data button

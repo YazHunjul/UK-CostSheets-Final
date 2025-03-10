@@ -18,13 +18,16 @@ def generate_word(context, genInfo):
         BytesIO: The generated Word document as a BytesIO object.
     """
     try:
-        # Format the reference number for the Word document
-        ref_num = genInfo.get('projectNum', '')
-        genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
-
-        # Path to the Word template
-        template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
+        # Get the absolute path to the resources directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        resources_dir = os.path.join(current_dir, '..', 'costSheetResources', 'templates')
         
+        # Use the path for loading the Word template
+        template_path = os.path.join(resources_dir, 'costSheet_canopy.docx')
+        
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Word template not found at: {template_path}")
+            
         # Load the Word template
         template = DocxTemplate(template_path)
 
