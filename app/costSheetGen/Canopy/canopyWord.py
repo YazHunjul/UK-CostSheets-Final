@@ -6,6 +6,7 @@ import math
 import requests
 import streamlit as st
 import toml
+from ..config import TEMPLATES
 
 def generate_word(context, genInfo):
     """
@@ -18,12 +19,11 @@ def generate_word(context, genInfo):
         BytesIO: The generated Word document as a BytesIO object.
     """
     try:
-        # Get the absolute path to the resources directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        resources_dir = os.path.join(current_dir, '..', 'costSheetResources', 'templates')
-        
-        # Use the path for loading the Word template
-        template_path = os.path.join(resources_dir, 'costSheet_canopy.docx')
+        # Format the reference number for the Word document
+        ref_num = genInfo.get('projectNum', '')
+        genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
+
+        template_path = TEMPLATES['WORD']
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")
