@@ -1,19 +1,17 @@
 import os
+from dotenv import load_dotenv
 
-# Base directory of the package
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Load environment variables
+load_dotenv()
 
-# Resources directory
-RESOURCES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'costSheetResources')
-
-# Template paths
+# Get template paths from environment variables or use defaults
 TEMPLATES = {
-    'EXCEL': os.path.join(RESOURCES_DIR, 'Halton Cost Sheet Jan 2025.xlsx'),
-    'WORD': os.path.join(RESOURCES_DIR, 'costSheet_canopy.docx')
+    'EXCEL': os.getenv('EXCEL_TEMPLATE_PATH', 
+        '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/Halton Cost Sheet Jan 2025.xlsx'),
+    'WORD': os.getenv('WORD_TEMPLATE_PATH',
+        '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx')
 }
 
 # Debug output
-print("BASE_DIR:", BASE_DIR)
-print("RESOURCES_DIR:", RESOURCES_DIR)
 print("EXCEL path:", TEMPLATES['EXCEL'])
 print("WORD path:", TEMPLATES['WORD']) 
