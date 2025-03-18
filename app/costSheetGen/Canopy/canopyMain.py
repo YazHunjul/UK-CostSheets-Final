@@ -13,6 +13,8 @@ import pandas as pd
 import openpyxl
 import math
 from ..config import TEMPLATES
+import json
+from datetime import datetime
 
 
 def get_initials(name):
@@ -313,33 +315,473 @@ def get_delivery_install_details(floor_name, key_suffix):
             "gas_interlock": gas_interlock,
             "co_sensor": co_sensor,
             "co2_sensor": co2_sensor,
-            "bms_interface": bms_interface
+            "bms_interface": bms_interface,
         }
+
+def load_session_state(json_data):
+    """Load session state from JSON data"""
+    try:
+        data = json.loads(json_data)
+        
+        # Only restore session state values, skip general info
+        if 'session_state' in data:
+            # First clear existing session state (except system keys)
+            keys_to_keep = {k for k in st.session_state.keys() if k.startswith('_')}
+            for k in list(st.session_state.keys()):
+                if k not in keys_to_keep and not k.startswith('customer'):  # Skip customer and other genInfo fields
+                    del st.session_state[k]
+            
+            # Then restore session state values
+            for key, value in data['session_state'].items():
+                if not key.startswith('_') and not key.startswith('customer'):  # Skip system keys and customer fields
+                    st.session_state[key] = value
+        
+        # Force a rerun to ensure all widgets update
+        st.rerun()
+        return True
+        
+    except Exception as e:
+        st.error(f"Error loading project data: {str(e)}")
+        return False
+
+def save_session_state():
+    """Save current session state to a JSON file"""
+    # Get all relevant session state data
+    save_data = {
+        'session_state': {
+            k: v for k, v in st.session_state.items() 
+            if not k.startswith('_') and not k.startswith('customer')  # Exclude internal keys and customer fields
+        },
+        'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    }
+    
+    # Convert to JSON string
+    json_str = json.dumps(save_data, indent=2)
+    
+    return json_str
+
+def add_save_load_section():
+    """Add save/load UI section"""
+    with st.expander("💾 Save/Load Project Data"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Save Project")
+            if st.button("Generate Project File"):
+                json_str = save_session_state()
+                project_name = st.session_state.get('projectNum', 'project')
+                
+                st.download_button(
+                    label="⬇️ Download Project File",
+                    data=json_str,
+                    file_name=f"{project_name}_data.json",
+                    mime="application/json"
+                )
+        
+        with col2:
+            st.markdown("### Load Project")
+            uploaded_file = st.file_uploader(
+                "Upload Project File", 
+                type=['json'],
+                help="Upload a previously saved project file"
+            )
+            
+            if uploaded_file is not None:
+                json_str = uploaded_file.read().decode()
+                if load_session_state(json_str):
+                    st.success("Project data loaded successfully!")
+                    st.rerun()  # Refresh the page to show loaded data
 
 def main(genInfo):
     st.markdown('<hr>', unsafe_allow_html=True)
     st.markdown("<h2 style='text-align: center;'>Canopy Cost Sheet</h2>", unsafe_allow_html=True)
     
-    # Get Kitchen Count
+    # Add save/load section at the top
+    add_save_load_section()
+    
+    st.markdown("---")
+    
+    # Add anchors for main sections
+    st.markdown("<div id='general_info'></div>", unsafe_allow_html=True)
+    
+    # Get Kitchen Count first
     num_kitchens = st.number_input("Enter Number of Levels", min_value=1, key='num_kitchens')
     kitchen_info = []
 
+    # Navigation sidebar
+    with st.sidebar:
+        st.markdown("### 🔍 Quick Navigation")
+        
+        # Main sections navigation
+        st.markdown("#### Main Sections:")
+        st.markdown("[📋 General Information](#general_info)")
+        st.markdown("[📦 Delivery & Installation](#delivery)")
+        st.markdown("[💾 Generate Files](#generate)")
+        
+        # Floor-Area navigation
+        st.markdown("#### Jump to Floor - Area:")
+        
+        for i in range(num_kitchens):
+            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
+            num_floors = st.session_state.get(f'floors_input_{i}', 1)
+            
+            if i > 0:
+                st.markdown("---")
+            
+            for floor in range(num_floors):
+                floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
+                
+                # Get canopy info for this floor
+                canopy_summary = []
+                canopy_key = f'canopies_input_{i}_{floor}'
+                if canopy_key in st.session_state:
+                    num_canopies = st.session_state[canopy_key]
+                    models = {}
+                    
+                    for c in range(num_canopies):
+                        model_key = f'model_{i}_{floor}_{c}'
+                        if model_key in st.session_state:
+                            model = st.session_state[model_key]
+                            models[model] = models.get(model, 0) + 1
+                    
+                    for model, count in models.items():
+                        if model:
+                            canopy_summary.append(f"{count}x {model}")
+                
+                summary_text = f"{kitchen_name} - {floor_name}"
+                if canopy_summary:
+                    summary_text += f"\n({', '.join(canopy_summary)})"
+                
+                st.markdown(f"[{summary_text}](#floor_{i}_{floor})")
+
+        # Add separator for Canopy Details
+        st.markdown("---")
+        
+        # Make Canopy Details expandable
+        with st.expander("🏗️ Current Canopy Details", expanded=False):
+            has_canopies = False
+            
+            # Get current canopy details from session state
+            for i in range(num_kitchens):
+                num_floors = st.session_state.get(f'floors_input_{i}', 1)
+                for floor in range(num_floors):
+                    canopy_key = f'canopies_input_{i}_{floor}'
+                    if canopy_key in st.session_state:
+                        num_canopies = st.session_state[canopy_key]
+                        for c in range(num_canopies):
+                            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
+                            floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
+                            
+                            # Use collapsible markdown for each canopy
+                            has_canopies = True
+                            st.markdown(f"<details><summary><b>{kitchen_name} - {floor_name} (Canopy {c + 1})</b></summary>", unsafe_allow_html=True)
+                            
+                            # Define all possible fields with their correct session state keys
+                            fields = {
+                                'itemNum': ('📌 Reference Number', 'Reference Number'),
+                                'model': ('🔧 Model', 'Model'),
+                                'config': ('⚙️ Configuration', 'Configuration'),
+                                'width': ('📏 Width', 'Width'),
+                                'length': ('📏 Length', 'Length'),
+                                'height': ('📏 Height', 'Height'),
+                                'section': ('🔢 Section', 'Section'),
+                                'flowRate': ('💨 Flow Rate', 'Flow Rate'),
+                                'light_type': ('💡 Light Type', 'Light Type'),
+                                'cladding': ('🧱 Wall Cladding', 'Wall Cladding'),
+                                'control_panel': ('🎛️ Control Panel', 'Control Panel'),
+                                'WW_pods': ('💧 WW Pods', 'WW Pods'),
+                                'WW_pods_quantity': ('🔢 WW Pods Quantity', 'WW Pods Quantity'),
+                                'pipework': ('🔧 Pipework', 'Pipework')
+                            }
+                            
+                            # Track filled and missing fields
+                            filled_fields = []
+                            missing_fields = []
+                            
+                            # Get model to check for CMWI/CMWF fields
+                            model = st.session_state.get(f'model_{i}_{floor}_{c}')
+                            
+                            # Check each field
+                            for field_key, (icon, label) in fields.items():
+                                value = st.session_state.get(f'{field_key}_{i}_{floor}_{c}')
+                                
+                                # Skip CMWI/CMWF specific fields if not applicable
+                                if field_key in ['control_panel', 'WW_pods', 'WW_pods_quantity', 'pipework']:
+                                    if model not in ['CMWI', 'CMWF']:
+                                        continue
+                                
+                                # Consider a field filled if it has any value (including 0) or is False
+                                if value is not None and value != '':
+                                    # Format the value display
+                                    if field_key in ['width', 'length', 'height']:
+                                        display_value = f"{value} mm"
+                                    elif field_key == 'flowRate':
+                                        display_value = f"{value} m³/s"
+                                    elif field_key == 'cladding':
+                                        display_value = 'Yes' if value else 'No'
+                                    else:
+                                        display_value = str(value)
+                                    
+                                    filled_fields.append((icon, label, display_value))
+                                else:
+                                    missing_fields.append((icon, label))
+                            
+                            # Show filled fields
+                            if filled_fields:
+                                st.markdown("<div style='margin-left: 20px'>", unsafe_allow_html=True)
+                                st.markdown("**✅ Filled Fields:**")
+                                for icon, label, value in filled_fields:
+                                    st.markdown(f"{icon} {label}: {value}")
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            
+                            # Show missing fields
+                            if missing_fields:
+                                st.markdown("<div style='margin-left: 20px'>", unsafe_allow_html=True)
+                                st.markdown("**❌ Missing Fields:**")
+                                for icon, label in missing_fields:
+                                    st.markdown(f"{icon} {label}")
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            
+                            st.markdown("</details>", unsafe_allow_html=True)
+                            st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
+            
+            if not has_canopies:
+                st.markdown("No canopies created yet.")
+
+        # Add final separator before Project Summary
+        st.markdown("---")
+        
+        # Project Summary
+        st.markdown("### 📊 Project Summary")
+        
+        # Check for missing general info
+        missing_info = []
+        required_fields = {
+            'projectName': 'Project Name',
+            'projectNum': 'Project Number',
+            'customer': 'Customer',
+            'sales_contact': 'Sales Contact',
+            'estimator': 'Estimator',
+            'location': 'Location',
+            'address': 'Address'
+        }
+        
+        for field, display_name in required_fields.items():
+            if not genInfo.get(field):
+                missing_info.append(display_name)
+        
+        if missing_info:
+            st.markdown("#### ⚠️ Missing Information:")
+            for field in missing_info:
+                st.markdown(f"- {field}")
+        
+        # Canopy Summary
+        st.markdown("#### 🏗️ Canopy Overview:")
+        total_canopies = 0
+        model_counts = {}
+        
+        # Iterate through session state to count canopies
+        for i in range(num_kitchens):
+            num_floors = st.session_state.get(f'floors_input_{i}', 1)
+            for floor in range(num_floors):
+                canopy_key = f'canopies_input_{i}_{floor}'
+                if canopy_key in st.session_state:
+                    num_canopies = st.session_state[canopy_key]
+                    total_canopies += num_canopies
+                    
+                    # Count models
+                    for c in range(num_canopies):
+                        model_key = f'model_{i}_{floor}_{c}'
+                        if model_key in st.session_state:
+                            model = st.session_state[model_key]
+                            if model:  # Only count if model is selected
+                                model_counts[model] = model_counts.get(model, 0) + 1
+        
+        st.markdown(f"Total Canopies: {total_canopies}")
+        if model_counts:
+            st.markdown("Models:")
+            for model, count in model_counts.items():
+                st.markdown(f"- {model}: {count}")
+        
+        # Add any warnings about missing canopy data
+        st.markdown("#### ⚠️ Missing Canopy Data:")
+        missing_data = False
+        
+        # Check session state for missing canopy data
+        for i in range(num_kitchens):
+            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
+            num_floors = st.session_state.get(f'floors_input_{i}', 1)
+            
+            for floor in range(num_floors):
+                floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
+                canopy_key = f'canopies_input_{i}_{floor}'
+                
+                if canopy_key in st.session_state:
+                    num_canopies = st.session_state[canopy_key]
+                    for c in range(num_canopies):
+                        missing_fields = []
+                        
+                        # Check all required fields
+                        field_checks = {
+                            'itemNum': 'Reference Number',
+                            'model': 'Model',
+                            'config': 'Configuration',
+                            'width': 'Width',
+                            'length': 'Length',
+                            'section': 'Section',
+                            'height': 'Height',
+                            'flowRate': 'Flow Rate',
+                            'light_type': 'Light Type'
+                        }
+                        
+                        for field, display_name in field_checks.items():
+                            field_key = f'{field}_{i}_{floor}_{c}'
+                            value = st.session_state.get(field_key)
+                            if not value and value != 0:  # Check for empty or None, but allow 0
+                                missing_fields.append(display_name)
+                        
+                        # Check light quantity if light type is selected and not a strip light
+                        light_type = st.session_state.get(f'light_type_{i}_{floor}_{c}')
+                        if light_type and not any(x in light_type for x in ['L6', 'L12', 'L18']):
+                            light_qty_key = f'light_qty_{i}_{floor}_{c}'
+                            if not st.session_state.get(light_qty_key):
+                                missing_fields.append('Light Quantity')
+                        
+                        # Check CMWI/CMWF specific fields
+                        model = st.session_state.get(f'model_{i}_{floor}_{c}')
+                        if model in ['CMWI', 'CMWF']:
+                            cmwi_fields = {
+                                'control_panel': 'Control Panel',
+                                'WW_pods': 'WW Pods',
+                                'WW_pods_quantity': 'WW Pods Quantity',
+                                'pipework': 'Pipework'
+                            }
+                            for field, display_name in cmwi_fields.items():
+                                field_key = f'{field}_{i}_{floor}_{c}'
+                                if not st.session_state.get(field_key):
+                                    missing_fields.append(display_name)
+                        
+                        if missing_fields:
+                            missing_data = True
+                            st.markdown(f"**{kitchen_name} - {floor_name} (Canopy {c + 1}):**")
+                            st.markdown(f"- Missing: {', '.join(missing_fields)}")
+        
+        if not missing_data:
+            st.markdown("✅ All required canopy data complete")
+
+        # Add CMWF/CMWI specific summary
+        cmwf_count = 0
+        cmwi_count = 0
+        ww_pods_total = 0
+        
+        for i in range(num_kitchens):
+            num_floors = st.session_state.get(f'floors_input_{i}', 1)
+            for floor in range(num_floors):
+                canopy_key = f'canopies_input_{i}_{floor}'
+                if canopy_key in st.session_state:
+                    num_canopies = st.session_state[canopy_key]
+                    for c in range(num_canopies):
+                        model = st.session_state.get(f'model_{i}_{floor}_{c}')
+                        if model == 'CMWF':
+                            cmwf_count += 1
+                            pods_qty = st.session_state.get(f'WW_pods_quantity_{i}_{floor}_{c}', 0)
+                            ww_pods_total += pods_qty
+                        elif model == 'CMWI':
+                            cmwi_count += 1
+                            pods_qty = st.session_state.get(f'WW_pods_quantity_{i}_{floor}_{c}', 0)
+                            ww_pods_total += pods_qty
+        
+        if cmwf_count > 0 or cmwi_count > 0:
+            st.markdown("#### 💧 Water Wash Details:")
+            if cmwf_count > 0:
+                st.markdown(f"- CMWF Canopies: {cmwf_count}")
+            if cmwi_count > 0:
+                st.markdown(f"- CMWI Canopies: {cmwi_count}")
+            st.markdown(f"- Total WW Pods: {ww_pods_total}")
+
+        # Add delivery and installation checks
+        st.markdown("#### 🚚 Delivery & Installation Status:")
+        missing_delivery = False
+        
+        for i in range(num_kitchens):
+            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
+            num_floors = st.session_state.get(f'floors_input_{i}', 1)
+            
+            for floor in range(num_floors):
+                floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
+                key_suffix = f"kitchen_{i}_floor_{floor}"
+                
+                # Check required delivery & installation fields
+                missing_fields = []
+                
+                # Check delivery fields
+                location = st.session_state.get(f'location_{key_suffix}')
+                plant_hire = st.session_state.get(f'plant_hire_{key_suffix}')
+                plant_selection = st.session_state.get(f'plant_selection_{key_suffix}')
+                strip_out = st.session_state.get(f'strip_out_{key_suffix}')
+                overnight = st.session_state.get(f'overnight_{key_suffix}')
+                normal_hours = st.session_state.get(f'normal_hours_{key_suffix}')
+                after_hours = st.session_state.get(f'after_hours_{key_suffix}')
+                wall_cladding_install = st.session_state.get(f'wall_cladding_install_{key_suffix}')
+                gas_interlock = st.session_state.get(f'gas_interlock_{key_suffix}')
+                co_sensor = st.session_state.get(f'co_sensor_{key_suffix}')
+                co2_sensor = st.session_state.get(f'co2_sensor_{key_suffix}')
+                bms_interface = st.session_state.get(f'bms_interface_{key_suffix}')
+                
+                # Add missing fields to list with more descriptive labels
+                if not location:
+                    missing_fields.append("Location")
+                if plant_hire and not plant_selection:  # Only check plant selection if plant hire is selected
+                    missing_fields.append("Plant Selection")
+                if strip_out is None:  # Check if strip out value is set
+                    missing_fields.append("Strip Out Cost")
+                if overnight is None:
+                    missing_fields.append("Overnight/Travel Expenses")
+                if normal_hours is None:
+                    missing_fields.append("Installation Normal Hours")
+                if after_hours is None:
+                    missing_fields.append("Installation After Hours")
+                if wall_cladding_install is None:
+                    missing_fields.append("Wall Cladding Installation")
+                if gas_interlock is None:
+                    missing_fields.append("Gas Interlock")
+                if co_sensor is None:
+                    missing_fields.append("CO Sensor")
+                if co2_sensor is None:
+                    missing_fields.append("CO2 Sensor")
+                if bms_interface is None:
+                    missing_fields.append("BMS Interface")
+                
+                if missing_fields:
+                    missing_delivery = True
+                    st.markdown(f"**{kitchen_name} - {floor_name}:**")
+                    st.markdown("Missing:")
+                    for field in missing_fields:
+                        st.markdown(f"❌ {field}")
+                    st.markdown("---")
+        
+        if not missing_delivery:
+            st.markdown("✅ All delivery & installation details complete")
+
+    # Main form content
     for i in range(num_kitchens):
+        st.markdown(f"<div id='kitchen_{i}'></div>", unsafe_allow_html=True)
         kitchen_name = st.text_input(f"Enter Level {i + 1} Name", key=f'kitchen_name_{i}')
         if kitchen_name:
-            # Create a dictionary for this kitchen
             kitchen_data = {
                 "kitchen_name": kitchen_name,
                 "floors": []
             }
 
-            with st.expander(f'{kitchen_name.title()} Floor Information', expanded=True):
+            with st.expander(f'{kitchen_name.title()} Floor Information', expanded=False):
                 num_floors = st.number_input(
                     f"Enter the number of areas in {kitchen_name} Floor", 
                     min_value=1, 
                     key=f'floors_input_{i}'
                 )
                 for floor in range(num_floors):
+                    # Add anchor for floor
+                    st.markdown(f"<div id='floor_{i}_{floor}'></div>", unsafe_allow_html=True)
                     floor_name = st.text_input(
                         f"Enter area {floor + 1} Name", 
                         key=f'floor_name_{i}_{floor}'
@@ -364,6 +806,12 @@ def main(genInfo):
                                 item_number = st.text_input('Reference Number', key=f'itemNum_{i}_{floor}_{canopy}')
                                 length = st.number_input("Length", min_value=0, key=f'length_{i}_{floor}_{canopy}')
                                 section = st.number_input('Sections', min_value=0, key=f'section_{i}_{floor}_{canopy}')
+
+                                # Get configuration value from session state since it's defined in coll2
+                                config_key = f'config_{i}_{floor}_{canopy}'
+                                if config_key in st.session_state and st.session_state[config_key] == "ISLAND":
+                                    st.caption(f"Total sections for ISLAND configuration: {section * 2}")
+
                                 light_type = st.selectbox(
                                     'Light Type',
                                     ['','LED STRIP L6 Inc DALI', 'LED STRIP L12 inc DALI', 'LED STRIP L18 Inc DALI', 'Small LED Spots inc DALI', 'LARGE LED Spots inc DALI'],
@@ -391,7 +839,7 @@ def main(genInfo):
                                 width = st.number_input("Width", min_value=0, key=f'width_{i}_{floor}_{canopy}')
                                 special_works = st.multiselect(
                                     'Special Works (Max 2)',
-                                    ['ROUND CORNERS', 'CUT OUT', 'CASTELLE LOCKING', 'HEADER DUCT S/S', 'HEADER DUCT', 'PAINT FINISH'],
+                                    ['ROUND CORNERS', 'CUT OUT', 'CASTELLE LOCKING ', 'HEADER DUCT S/S', 'HEADER DUCT ', 'PAINT FINISH', 'UV ON DEMAND', 'E/over for emergency strip light', 'E/over for small emer. spot light', 'E/over for large emer. spot light', 'COLD MIST ON DEMAND', 'CMW  PIPEWORK HWS/CWS', 'CANOPY GROUND SUPPORT', ' 2nd EXTRACT PLENUM', 'SUPPLY AIR PLENUM', 'CAPTUREJET PLENUM', 'COALESCER'],
                                     key=f'specialWorks_{i}_{floor}_{canopy}',
                                     max_selections=2
                                 )
@@ -425,7 +873,7 @@ def main(genInfo):
                                     ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
                                     key=f'model_{i}_{floor}_{canopy}'
                                 )
-                                height = st.number_input("Height", min_value=0, key=f'height_{i}_{floor}_{canopy}')
+                                height = st.number_input("Height", min_value=0, value=555, key=f'height_{i}_{floor}_{canopy}')
                                 cladding = st.selectbox(
                                     "Wall Cladding",
                                     ['', '2M² (HFL)'],
@@ -464,25 +912,25 @@ def main(genInfo):
 
                             # Create a dictionary for this canopy
                             canopy_data = {
-                                'itemNum' : item_number,
-                                "model": model,
-                                "configuration": configuration,
-                                "section": section,
-                                "height": height,
-                                "width": width,
-                                "length": length,
+                                'item_number': item_number,
+                                'model': model,
+                                'configuration': configuration,
+                                'section': section,
+                                'height': height,
+                                'width': width,
+                                'length': length,
                                 'lights': light_type,
                                 'light_quantity': light_quantity,
+                                'flowrate': flowrate,
                                 'specialWorks': special_works_dict,
                                 'wallCladding': cladding,
-                                'flowrate' : flowrate,
-                                'control_panel' : control_panel,
-                                'WW_pods' : WW_pods,
-                                'pipework' : CWS_HWS_pipework,
-                                'cladding_width' : cladding_width,
+                                'control_panel': control_panel,
+                                'WW_pods': WW_pods,
+                                'pipework': CWS_HWS_pipework,
+                                'cladding_width': cladding_width,
                                 'cladding_height': cladding_height,
-                                'cladding_desc' : description,
-                                'WW_pods_quantity' : WW_pods_quantity
+                                'cladding_desc': description,
+                                'WW_pods_quantity': WW_pods_quantity
                             }
 
                             # Append canopy data to the floor
@@ -493,10 +941,9 @@ def main(genInfo):
 
             # Append kitchen data to the main list
             kitchen_info.append(kitchen_data)
-    
-    st.markdown('<hr>', unsafe_allow_html=True)
 
     # Delivery & Installation Section
+    st.markdown("<div id='delivery'></div>", unsafe_allow_html=True)
     st.markdown("## 🚚 Delivery & Installation Details")
     
     # Iterate through all kitchens and their floors
@@ -506,17 +953,17 @@ def main(genInfo):
             kitchen_name = kitchen['kitchen_name']
             
             # Get delivery & installation details for this floor
-            floor['delivery_install_data'] = get_delivery_install_details(
-                floor_name=f"{kitchen_name} - {floor_name}",  # Include kitchen name for clarity
-                key_suffix=f"kitchen_{kitchen_idx}_floor_{floor_idx}"  # Unique key for each floor
+            delivery_install_data = get_delivery_install_details(
+                floor_name=f"{kitchen_name} - {floor_name}",
+                key_suffix=f"kitchen_{kitchen_idx}_floor_{floor_idx}"
             )
+            
+            # Store delivery & installation data including P182 value
+            floor['delivery_install_data'] = delivery_install_data
 
     st.markdown('<hr>', unsafe_allow_html=True)
 
-    # After delivery & installation section
-    st.markdown('<hr>', unsafe_allow_html=True)
-
-    # Add Email Summary Section first
+    # Add Email Summary Section
     col1, col2 = st.columns([3, 1])
     with col1:
         generate_email = st.checkbox("Generate Email Summary", value=False)
@@ -604,6 +1051,8 @@ def main(genInfo):
     st.markdown('<hr>', unsafe_allow_html=True)
 
     # Document generation section
+    st.markdown("<div id='generate'></div>", unsafe_allow_html=True)
+    st.markdown("## 💾 Generate Files")
     st.markdown("### Step 1: Generate and Download Excel")
     if st.button("Generate Excel File"):
         try:
@@ -630,119 +1079,145 @@ def main(genInfo):
     if uploaded_file is not None:
         try:
             st.write("Loading Excel file...")
-            # Load workbooks
-            wb_data = openpyxl.load_workbook(uploaded_file, data_only=True)  # For reading values
-            wb = openpyxl.load_workbook(uploaded_file, keep_vba=True, data_only=False)  # For preserving formulas and data validation
+            # Create a copy of the uploaded file in memory
+            excel_data = BytesIO(uploaded_file.getvalue())
             
-            # First collect all prices and P182 values
-            prices_by_item = {}
-            current_row = 12
-            sheet = wb_data['CANOPY']
+            # Load workbook
+            wb_data = openpyxl.load_workbook(excel_data, data_only=True)
+            excel_data.seek(0)
+            wb = openpyxl.load_workbook(excel_data, data_only=False)
             
-            # First pass: Collect all prices and find corresponding P182 values
-            while sheet[f'C{current_row}'].value:
-                item_num = sheet[f'C{current_row}'].value
-                model = sheet[f'D{current_row + 2}'].value
-                
-                st.write(f"\nCollecting prices for item {item_num}")
-                
-                # Get canopy price
-                price = sheet[f'N{current_row}'].value
-                if price is not None:
-                    try:
-                        st.write(f"Raw price value: {price} (type: {type(price)})")
-                        if isinstance(price, str):
-                            price = price.replace('£', '').replace(',', '').strip()
-                        rounded_price = float(f"{math.ceil(float(price))}.00")
-                        
-                        # Find corresponding sheet for this item
-                        p182_value = 0.0
-                        for sheet_name in wb_data.sheetnames:
-                            if sheet_name.startswith('CANOPY - '):
-                                item_sheet = wb_data[sheet_name]
-                                # Debug sheet contents
-                                st.write(f"\nChecking sheet: {sheet_name}")
-                                st.write("Sheet type:", type(item_sheet))
-                                st.write("All sheet names:", wb_data.sheetnames)
-                                
-                                # Get P182 value from this sheet
-                                try:
-                                    p182_cell = item_sheet['P182'].value
-                                    st.write("P182 cell raw value:", p182_cell)
-                                    st.write("P182 cell type:", type(p182_cell))
-                                    
-                                    if p182_cell is not None:
-                                        if isinstance(p182_cell, str):
-                                            p182_cell = p182_cell.replace('£', '').replace(',', '').strip()
-                                        p182_value = float(f"{math.ceil(float(p182_cell))}.00")
-                                        st.write(f"Processed P182 value: £{p182_value:.2f}")
-                                        break  # Found the value, no need to check other sheets
-                                except Exception as e:
-                                    st.error(f"Error accessing P182 in {sheet_name}: {str(e)}")
-                                    st.write("Full error:", e)
-                        
-                        prices_by_item[item_num] = {
-                            'base_price': rounded_price,
-                            'p182_value': p182_value
-                        }
-                        st.write(f"Stored price: £{rounded_price:.2f} and P182: £{p182_value:.2f}")
-                    except (ValueError, TypeError) as e:
-                        st.error(f"Error processing price for {item_num}: {e}")
-                else:
-                    st.warning(f"No price found in cell N{current_row}")
-                
-                current_row += 17
-            
-            # Debug the collected prices and P182 values
-            st.write("\nAll collected prices:", prices_by_item)
-            
-            # Calculate total P182
-            total_p182 = sum(item['p182_value'] for item in prices_by_item.values())
-            st.write(f"Total P182 value: £{total_p182:.2f}")
-            
-            # Write total P182 to CANOPY sheet
-            sheet = wb['CANOPY']
-            sheet['N182'] = total_p182
-            
-            # Save the modified workbook
+            # Save the Excel file to BytesIO
             modified_excel = BytesIO()
             wb.save(modified_excel)
             modified_excel.seek(0)
             
-            # Second pass: Add prices and P182 to kitchen_info structure
-            st.write("\nAssigning prices to canopies...")
+            # Initialize total P182
+            total_p182 = 0
+
+            # Initialize grouped_canopy_data first
+            grouped_canopy_data = {}
             for kitchen in kitchen_info:
-                st.write(f"\nKitchen: {kitchen['kitchen_name']}")
-                kitchen['total_p182'] = 0
-                
+                kitchen_name = kitchen['kitchen_name']
+                grouped_canopy_data[kitchen_name] = {}
                 for floor in kitchen['floors']:
-                    st.write(f"Floor: {floor['floor_name']}")
+                    floor_name = floor['floor_name']
+                    floor['p182_value'] = 0.0  # Initialize p182_value in the floor data
+                    grouped_canopy_data[kitchen_name][floor_name] = {
+                        'canopies': floor['canopies'],
+                        'floor_name': floor['floor_name'],
+                        'delivery_install_data': floor.get('delivery_install_data', {}),
+                        'p182': 0.0,  # Initialize p182 with 0
+                        'floor_data': {
+                            'cladding_total': 0,
+                            'uv_total': 0
+                        }
+                    }
+            
+            # First pass: Collect P182 values and canopy prices from each canopy sheet
+            p182_values = {}
+            canopy_prices = {}  # New dictionary to store canopy prices
+            for sheet_name in wb_data.sheetnames:
+                if sheet_name.startswith('CANOPY - '):
+                    item_sheet = wb_data[sheet_name]
                     
-                    # Find P182 value for this floor
-                    for sheet_name in wb_data.sheetnames:
-                        if sheet_name.startswith('CANOPY - '):
-                            if floor['floor_name'] in sheet_name and kitchen['kitchen_name'][:8] in sheet_name:
-                                item_sheet = wb_data[sheet_name]
-                                p182_cell = item_sheet['P182'].value
-                                if p182_cell is not None:
-                                    try:
-                                        if isinstance(p182_cell, str):
-                                            p182_cell = p182_cell.replace('£', '').replace(',', '').strip()
-                                        floor['p182_value'] = float(f"{math.ceil(float(p182_cell))}.00")
-                                        kitchen['total_p182'] += floor['p182_value']
-                                        st.write(f"Found P182 value for {floor['floor_name']}: £{floor['p182_value']:.2f}")
-                                        break
-                                    except (ValueError, TypeError) as e:
-                                        st.error(f"Error processing P182 for {floor['floor_name']}: {e}")
+                    # Get P182 value
+                    p182_value = item_sheet['P182'].value
+                    if p182_value is not None:
+                        try:
+                            if isinstance(p182_value, str):
+                                p182_value = p182_value.replace('£', '').replace(',', '').strip()
+                            p182_values[sheet_name] = float(p182_value)
+                            st.write(f"Found P182 value in sheet {sheet_name}: {p182_value}")
+                        except (ValueError, TypeError) as e:
+                            st.error(f"Error processing P182 value from sheet {sheet_name}: {e}")
                     
-                    # Add prices to canopies
-                    for canopy in floor['canopies']:
-                        item_num = canopy.get('itemNum')
-                        if item_num in prices_by_item:
-                            canopy['total_price'] = prices_by_item[item_num]['base_price']
-                            st.write(f"Added price £{canopy['total_price']:.2f} to canopy {item_num}")
-                        else:
-                            st.warning(f"No price found for canopy {item_num}")
+                    # Get canopy prices and extract static values
+                    current_row = 12  # Start row for prices
+                    extract_row = 22  # Start row for extract static
+                    sheet_prices = []
+                    extract_statics = []  # List to store extract static values
+                    
+                    while True:
+                        # Get price
+                        price_cell = item_sheet[f'P{current_row}'].value
+                        if price_cell is None:
+                            break
+                        
+                        # Get extract static from column F
+                        extract_static = item_sheet[f'F{extract_row}'].value
+                        
+                        try:
+                            if isinstance(price_cell, str):
+                                price_cell = price_cell.replace('£', '').replace(',', '').strip()
+                            sheet_prices.append(float(price_cell))
+                            
+                            # Process extract static value
+                            if extract_static is not None:
+                                if isinstance(extract_static, str):
+                                    extract_static = extract_static.replace('Pa', '').strip()
+                                extract_statics.append(float(extract_static))
+                            else:
+                                extract_statics.append(0.0)
+                            
+                            st.write(f"Found in {sheet_name}:")
+                            st.write(f"  Price at P{current_row}: {price_cell}")
+                            st.write(f"  Extract Static at F{extract_row}: {extract_static}")
+                        except (ValueError, TypeError) as e:
+                            st.error(f"Error processing values at row {current_row}: {e}")
+                        
+                        current_row += 17  # Move to next canopy section
+                        extract_row += 17  # Move to next extract static value
+                    
+                    if sheet_prices:
+                        canopy_prices[sheet_name] = sheet_prices
+                        # Store extract static values with the same sheet name
+                        canopy_prices[f"{sheet_name}_extract_static"] = extract_statics
+
+            # Update floor data with both P182 and canopy prices
+            for kitchen_name, kitchen in grouped_canopy_data.items():
+                for floor_name, floor_data in kitchen.items():
+                    # Try different sheet name formats
+                    possible_sheet_names = [
+                        f"CANOPY - {kitchen_name} ({floor_name})",
+                        f"CANOPY - {kitchen_name} ({floor_name[:8]}",
+                        f"CANOPY - {floor_name} ({kitchen_name})",
+                        f"CANOPY - {floor_name} ({kitchen_name[:8]}"
+                    ]
+                    
+                    # Find matching sheet
+                    matching_sheet = None
+                    for sheet_name in p182_values.keys():
+                        if any(possible_name in sheet_name for possible_name in possible_sheet_names):
+                            matching_sheet = sheet_name
+                            break
+                    
+                    if matching_sheet:
+                        # Add P182 value
+                        p182_value = p182_values[matching_sheet]
+                        floor_data['p182'] = p182_value
+                        
+                        # Store at both levels to ensure consistency
+                        for kitchen in kitchen_info:
+                            for floor in kitchen['floors']:
+                                if floor['floor_name'] == floor_name:
+                                    floor['p182_value'] = p182_value
+                                    break
+                        
+                        # Add canopy prices and extract static values if available
+                        if matching_sheet in canopy_prices:
+                            prices = canopy_prices[matching_sheet]
+                            extract_statics = canopy_prices.get(f"{matching_sheet}_extract_static", [])
+                            
+                            # Assign prices and extract static values to canopies in order
+                            for canopy, price, extract_static in zip(floor_data['canopies'], prices, extract_statics):
+                                canopy['total_price'] = price
+                                canopy['extract_static'] = extract_static
+                            
+                            st.write(f"For {kitchen_name} - {floor_name}:")
+                            st.write(f"  P182: {p182_value}")
+                            st.write(f"  Canopy Prices: {[c.get('total_price', 0) for c in floor_data['canopies']]}")
+                            st.write(f"  Extract Static Values: {[c.get('extract_static', 0) for c in floor_data['canopies']]}")
 
             # Create a dictionary for kitchen totals
             kitchen_totals = {}
@@ -796,7 +1271,7 @@ def main(genInfo):
                                                     price_cell = price_cell.replace('£', '').replace(',', '').strip()
                                                 canopy['cladding_price'] = float(f"{math.ceil(float(price_cell))}.00")
                                             except (ValueError, TypeError) as e:
-                                                st.error(f"Error processing cladding price for {canopy.get('itemNum')}: {e}")
+                                                st.error(f"Error processing cladding price for {canopy.get('item_number')}: {e}")
                                     
                                     # Get UV component prices if it's a UV canopy
                                     if 'UV' in canopy.get('model', ''):
@@ -817,12 +1292,16 @@ def main(genInfo):
                                 
                                 break
                     
-                    # Store floor data after processing all canopies
+                    # Store floor data with all required fields
                     grouped_canopy_data[kitchen_name][floor_name] = {
                         'canopies': floor['canopies'],
-                        'delivery_install_data': floor['delivery_install_data'],
                         'floor_name': floor['floor_name'],
-                        'p182': floor['p182_value']
+                        'delivery_install_data': floor.get('delivery_install_data', {}),
+                        'p182': floor['p182_value'],  # Use the stored value directly
+                        'floor_data': {
+                            'cladding_total': 0,
+                            'uv_total': 0
+                        }
                     }
                 
                 # Store kitchen total after processing all floors
@@ -835,41 +1314,53 @@ def main(genInfo):
                 'kitchen_totals': kitchen_totals  # Add the totals dictionary
             }
 
-            # Generate Word document with the restructured data
-            try:
-                word_file = CW.generate_word(word_context, genInfo)
+            # Generate Word document
+            word_file = CW.generate_word(word_context, genInfo)
+            
+            if word_file is None:
+                st.error("Error: Word document generation returned None")
+                return
+            
+            # Create ZIP with all files
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w') as zf:
+                # Add the uploaded Excel file directly with its original name
+                uploaded_file.seek(0)  # Reset file pointer to start
+                zf.writestr(uploaded_file.name, uploaded_file.read())
                 
-                if word_file is None:
-                    st.error("Error: Word document generation returned None")
-                    return
+                # Add Word file
+                zf.writestr("Halton Quotation.docx", word_file.getvalue())
                 
-                # Create ZIP with both files
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w') as zf:
-                    # Add modified uploaded Excel file
-                    excel = f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx"
-                    modified_excel.seek(0)
-                    zf.writestr("Cost Sheet.xlsx", modified_excel.getvalue())
-                    
-                    # Add Word file
-                    zf.writestr("Halton Quotation.docx", word_file.getvalue())
+                # Add JSON file with all inputs
+                project_data = {
+                    'session_state': {
+                        k: v for k, v in st.session_state.items() 
+                        if not k.startswith('_') and not k.startswith('customer')
+                    },
+                    'kitchen_info': kitchen_info,
+                    'grouped_canopy_data': grouped_canopy_data,
+                    'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                }
                 
-                zip_buffer.seek(0)
-                
-                # Provide download button for the ZIP file
-                st.download_button(
-                    label="⬇️ Download Final Package",
-                    data=zip_buffer,
-                    file_name="Cost_Sheet_and_Quotation.zip",
-                    mime="application/zip"
+                json_str = json.dumps(project_data, indent=2)
+                project_name = st.session_state.get('projectNum', 'project')
+                zf.writestr(
+                    f"{project_name}_data.json",
+                    json_str.encode('utf-8')
                 )
             
-            except Exception as e:
-                st.error(f"Error generating Word document: {str(e)}")
-                st.write("Word context:", word_context)
+            zip_buffer.seek(0)
+            
+            # Provide download button for the ZIP file
+            st.download_button(
+                label="⬇️ Download Final Package",
+                data=zip_buffer,
+                file_name=f"{genInfo['projectNum']}_Package.zip",
+                mime="application/zip"
+            )
 
         except Exception as e:
-            st.error(f"An error occurred processing the file: {str(e)}")
+            st.error(f"Error generating files: {str(e)}")
 
     # Use the names from general_info
   
@@ -888,12 +1379,12 @@ def fill_dummy_kitchen_data():
     st.session_state['length'] = 2000
     st.session_state['height'] = 600
     st.session_state['section'] = 2
-    st.session_state['flowrate'] = 0.5
+    st.session_state['flowRate'] = 0.5
     
     # Calculate Supply Air for specific models
     if st.session_state['model'] in ['UVX-M', 'KVX-M', 'KVF', 'CMWF', 'UVF']:
         # Supply Air calculation
-        supply_air = st.session_state['flowrate'] * 0.85  # 85% of extract rate
+        supply_air = st.session_state['flowRate'] * 0.85  # 85% of extract rate
         st.session_state['supply_air'] = supply_air
     
     # Set lights
@@ -901,7 +1392,7 @@ def fill_dummy_kitchen_data():
     st.session_state['light_quantity'] = 2
     
     # Set wall cladding
-    st.session_state['wallCladding'] = True
+    st.session_state['cladding'] = True
     st.session_state['cladding_desc'] = ["Rear", "Left"]
 
 def canopy_main():

@@ -132,105 +132,30 @@ def scope_of_works(context):
     print(f"Final scope lines: {scope_lines}")
     return scope_lines
 
-def extract_canopy_info_grouped(kitchen_info):
-    """
-    Groups processed canopy data by kitchens and floors and adds Important Note calculations.
-
-    Args:
-        kitchen_info (dict): Dictionary containing the 'kitchens' key with a list of kitchen data.
-
-    Returns:
-        dict: A dictionary organized by kitchens and floors with processed canopy data.
-    """
-    kitchens = kitchen_info.get("kitchens", [])
+def extract_canopy_info_grouped(context):
+    kitchens = context.get("kitchens", [])
     grouped_canopies = {}
-
+    
     for kitchen in kitchens:
         kitchen_name = kitchen["kitchen_name"].title()
         grouped_canopies[kitchen_name] = {}
-
+        
         for floor in kitchen["floors"]:
             floor_name = floor["floor_name"].title()
             display_name = f"{kitchen_name} – {floor_name}"
             
+            # Initialize with all required fields
             grouped_canopies[kitchen_name][display_name] = {
-                "canopies": [],
+                "canopies": floor.get('canopies', []),
                 "important_note": "",
-                "cladding_total": 0,
-                "uv_total": 0  # Add UV total
-            }
-
-            total_extract_volume = 0
-            total_mua_volume = 0
-            cladding_total = 0
-
-            for canopy in floor["canopies"]:
-                model = canopy.get("model", "")
-                length = canopy.get("length", 0)
-                sections = canopy.get("section", 0)
-                flowrate = round(canopy.get("flowrate", 0), 3)
-
-                # Calculate Supply Air for specific models
-                supply_air = None
-                if model in ['UVX-M', 'KVX-M', 'KVF', 'CMWF', 'UVF']:
-                    # MUA Volume = (L - 100) × 0.225 / 1000
-                    supply_air = round(((length - 100) * 0.225) / 1000, 3)
-                    total_mua_volume += supply_air
-
-                # Add to total extract volume (the full amount)
-                total_extract_volume += flowrate
-
-                if canopy.get('wallCladding'):
-                    cladding_total += 3520.00
-
-                # Add processed data to the current floor's list
-                canopy_data = {
-                    'item_number': canopy.get('itemNum', ''),
-                    "model": model,
-                    "length": length,
-                    "width": canopy.get("width", 0),
-                    "height": canopy.get("height", 0),
-                    "sections": sections,
-                    "flowrate": flowrate,
-                    "supply_air": supply_air,
-                    "f12": calculate_f12(length, sections),
-                    "grease_filters": calculate_grease_filters(model, calculate_f12(length, sections), length, sections),
-                    "extract_static_pa": calculate_extract_static_pa(calculate_grease_filters(model, calculate_f12(length, sections), length, sections), flowrate, model),
-                    "wallCladding": canopy.get("wallCladding", ""),
-                    "total_price": canopy.get("total_price", 0),
-                    "cladding_price": canopy.get("cladding_price", 0),
-                    "uv_price": canopy.get("uv_price", 0)  # Add UV price
+                "floor_name": floor['floor_name'],
+                "p182": floor.get('p182_value', 0),  # Get p182 value with fallback
+                "floor_data": {
+                    "cladding_total": 0,
+                    "uv_total": 0
                 }
-
-                # Add lights information if present
-                if canopy.get('lights'):
-                    canopy_data["lights"] = "LED Strip"  # Just set it to "LED Strip" instead of the full value
-                    canopy_data["light_quantity"] = canopy.get('light_quantity')
-
-                # Add to UV total if it's a UV model
-                if 'UV' in model:
-                    grouped_canopies[kitchen_name][display_name]["uv_total"] += canopy_data["uv_price"]
-
-                grouped_canopies[kitchen_name][display_name]["canopies"].append(canopy_data)
-
-            # Store the cladding total for this floor
-            grouped_canopies[kitchen_name][display_name]["cladding_total"] = cladding_total
-
-            # Calculate the important note with rounded values
-            total_extract_volume = round(total_extract_volume, 3)
-            total_mua_volume = round(total_mua_volume, 3)
-            required_mua = round(total_extract_volume * 0.85, 3)
-            shortfall = round(required_mua - total_mua_volume, 3)
-
-            important_note = (
-                f"The make-up air flows shown above are the maximum that we can introduce through the canopy. "
-                f"This should be equal to approximately 85% of the extract i.e. {required_mua}m³/s. "
-                f"In this instance it only totals {total_mua_volume}m³/s, therefore the shortfall of {shortfall}m³/s "
-                f"must be introduced through ceiling grilles or diffusers, by others."
-            )
-
-            grouped_canopies[kitchen_name][display_name]["important_note"] = important_note
-
+            }
+    
     return grouped_canopies
 
 def extract_cmwi_canopies(kitchen_info):

@@ -27,6 +27,9 @@ def get_initials(name):
     return ''
 
 def getInfo():
+    # Add anchor at the very top
+    st.markdown("<div id='general_info'></div>", unsafe_allow_html=True)
+    st.markdown("## 📋 General Information")
     col1, col2, col3 = st.columns(3)
     with col1:
         proj_name = st.text_input('Project Name', placeholder='', key='projName')
@@ -85,3 +88,12 @@ def getInfo():
 # Dan Butler (07703 729686)
 # Chris Mannus (07870 263280)
 # Dean Griffiths (07814 784352)                 David Stewart (07989 185991)          
+
+def main():
+    # Add anchor for general info section
+    st.markdown("<div id='general_info'></div>", unsafe_allow_html=True)
+    
+    st.markdown("<h1 style='text-align: center;'>Halton Cost Sheet Generator</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>General Information</h2>", unsafe_allow_html=True)
+    
+    # Rest of your general information code...
