@@ -23,7 +23,7 @@ def generate_word(context, genInfo):
         ref_num = genInfo.get('projectNum', '')
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
-        template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
+        template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")
@@ -49,7 +49,34 @@ def generate_word(context, genInfo):
         if not scope_work:
             scope_work = []
 
-        # Update genInfo with processed data
+        # Use the kitchen_totals passed from canopyMain.py
+        kitchen_totals = context.get('kitchen_totals', {})
+        # Round each kitchen total
+        kitchen_totals = {k: math.ceil(v) for k, v in kitchen_totals.items()}
+        grand_total = math.ceil(sum(kitchen_totals.values()))
+
+        # Get the totals from context
+        total_cost = math.ceil(sum(kitchen_totals.values()))  # Total from T16
+        total_k9_cost = context.get('total_k9_cost', 0)  # Total from S16
+
+        # Add pricing information to genInfo
+        genInfo.update({
+            'kitchen_totals': kitchen_totals,  # Already rounded when extracted from Excel
+            'grand_total': math.ceil(sum(kitchen_totals.values())),
+            'total_job_price': total_cost,
+            'total_cost': total_k9_cost
+        })
+
+        # Round prices in grouped_canopy_data
+        for kitchen_name, kitchen in grouped_canopy_data.items():
+            for floor_name, floor_data in kitchen.items():
+                for canopy in floor_data['canopies']:
+                    if 'total_price' in canopy:
+                        canopy['total_price'] = math.ceil(canopy['total_price'])
+                    if 'cladding_price' in canopy:
+                        canopy['cladding_price'] = math.ceil(canopy['cladding_price'])
+
+        # Update genInfo with rounded data
         genInfo["grouped_canopy_data"] = grouped_canopy_data
         genInfo["cmwi_canopies"] = cmwi_data
         genInfo["scope_of_work"] = scope_work
@@ -61,24 +88,6 @@ def generate_word(context, genInfo):
             print("No wall cladding data to add")
 
         print("DEBUG - Final genInfo:", genInfo)  # Debug print
-
-        # Use the kitchen_totals passed from canopyMain.py
-        kitchen_totals = context.get('kitchen_totals', {})
-        grand_total = sum(kitchen_totals.values())
-
-        # Add pricing information to genInfo
-        genInfo.update({
-            'delivery_price': 13863.00,
-            'commissioning_price': 1502.00,
-            'uvc_price': 1040.00,
-            'cladding_price': 3520.00,
-            'kitchen_totals': kitchen_totals,  # Use the N9 sums from canopyMain
-            'grand_total': grand_total
-        })
-
-        # Debug the totals
-        print("Kitchen totals from N9:", kitchen_totals)
-        print("Grand total:", grand_total)
 
         # Render the template with the given context
         template.render(genInfo)
@@ -144,15 +153,93 @@ def extract_canopy_info_grouped(context):
             floor_name = floor["floor_name"].title()
             display_name = f"{kitchen_name} – {floor_name}"
             
-            # Initialize with all required fields
+            # Calculate total extract and makeup air for the floor
+            total_extract = 0
+            total_makeup = 0
+            has_fresh_air_canopy = False
+            
+            for canopy in floor.get('canopies', []):
+                model = canopy.get('model', '')
+                # Check if model ends with 'F' for Fresh Air
+                if model.endswith('F'):
+                    has_fresh_air_canopy = True
+                    flow_rate = canopy.get('flowRate', 0)
+                    total_extract += flow_rate
+                    # Makeup air is 85% of extract
+                    makeup_air = round(flow_rate * 0.85, 2)
+                    total_makeup += makeup_air
+                    # Add makeup air to canopy data
+                    canopy['makeup_air'] = makeup_air
+
+            # Calculate shortfall
+            shortfall = round(total_extract - total_makeup, 2)
+            
+            # Always create important note if there's a Fresh Air canopy
+            important_note = ""
+            if has_fresh_air_canopy:
+                important_note = (
+                    f"The makeup air flows shown above are the maximum that we can introduce through the "
+                    f"canopy. This should be equal to approximately 85% of the extract the shortfall of "
+                    f"{shortfall} m3/s must be introduced through ceiling grilles or diffusers, by others.\n"
+                    f"If you require further guidance on this, please do not hesitate to contact us."
+                )
+            
+            # Calculate floor subtotal
+            floor_subtotal = 0
+            for canopy in floor.get('canopies', []):
+                floor_subtotal += float(canopy.get('total_price', 0))
+            
+            # Add delivery/installation costs
+            delivery_data = floor.get('delivery_install_data', {})
+            floor_subtotal += float(delivery_data.get('delivery_price', 0))
+            floor_subtotal += float(delivery_data.get('install_price', 0))
+            # Add commissioning when implemented
+            
+            # Calculate cladding total and store cladding info
+            cladding_total = 0
+            cladding_canopies = []  # New list to store canopies with cladding
+            
+            for canopy in floor.get('canopies', []):
+                if canopy.get('wallCladding'):
+                    cladding_price = float(canopy.get('cladding_price', 0))
+                    cladding_total += cladding_price
+                    # Store cladding info for this canopy
+                    cladding_canopies.append({
+                        'item_number': canopy.get('item_number', '1'),
+                        'model': canopy.get('model', ''),
+                        'cladding_desc': canopy.get('cladding_desc', []),
+                        'cladding_price': cladding_price,
+                        'width': canopy.get('cladding_width', 0),
+                        'height': canopy.get('cladding_height', 0)
+                    })
+            
+            # Get commissioning price
+            commission_price = float(floor.get('commission_price', 0))
+            
+            # Get test & commission value from floor data
+            test_commission = float(floor.get('test_commission', 0))
+            
+            # Store in grouped_canopies
             grouped_canopies[kitchen_name][display_name] = {
                 "canopies": floor.get('canopies', []),
-                "important_note": "",
+                "important_note": important_note,
                 "floor_name": floor['floor_name'],
-                "p182": floor.get('p182_value', 0),  # Get p182 value with fallback
+                "p182": floor.get('p182_value', 0),
+                "test_commission": test_commission,  # Store the extracted C193 value
+                "commission_price": commission_price,  # Add commission price
+                "subtotal": round(floor_subtotal, 2),
+                "cladding_total": round(cladding_total, 2),
                 "floor_data": {
-                    "cladding_total": 0,
-                    "uv_total": 0
+                    "cladding_total": round(cladding_total, 2),
+                    "cladding_canopies": cladding_canopies,
+                    "test_commission": test_commission,  # Store here too
+                    "uv_total": 0,
+                    "total_extract": total_extract,
+                    "total_makeup": total_makeup,
+                    "shortfall": shortfall,
+                    "has_makeup_air": has_fresh_air_canopy,
+                    "important_note": important_note,
+                    "subtotal": round(floor_subtotal, 2)
                 }
             }
     
@@ -177,13 +264,21 @@ def extract_cmwi_canopies(kitchen_info):
                 if "CMW" in canopy.get("model", ""):  # Filter for CMWI canopies
                     length = canopy.get("length", 0)
 
-                    # Perform calculations
-                    cws_continuous = round(length / 1000 * 0.02, 2)  # CWS @ 2 Bar (L/s)
-                    hws_wash_cycle = round(length / 1000 * 0.103, 3)  # HWS @ 2 Bar (L/s)
-                    hws_storage = round(hws_wash_cycle * 180, 3)  # HWS Storage (Litres)
+                    # Calculate values
+                    cws_continuous = round(length / 1000 * 0.02, 2)
+                    hws_wash_cycle = round(length / 1000 * 0.103, 3)
+                    hws_storage = round(hws_wash_cycle * 180, 3)
+
+                    # Try multiple possible keys for item number
+                    item_number = (
+                        canopy.get('itemNum') or 
+                        canopy.get('item_number') or 
+                        canopy.get('reference_number') or 
+                        ''
+                    )
 
                     cmwi_canopies.append({
-                        "item_no": f"{canopy.get('itemNum', '')}",
+                        "item_no": str(item_number),  # Convert to string and ensure not None
                         "model": canopy["model"],
                         "cws_continuous": f"{cws_continuous} L/s",
                         "hws_wash_cycle": f"{hws_wash_cycle} L/s",
@@ -235,24 +330,20 @@ def calculate_extract_static_pa(grease_filters, flow_rate, model):
 
 def get_wall_cladding(kitchen_info):
     """
-    Extracts wall cladding information based on canopy data.
+    Extracts wall cladding information only for canopies that have cladding.
     Returns None if no canopies have wall cladding.
     """
-    print("DEBUG - Starting wall cladding check")
-    
     kitchens = kitchen_info.get("kitchens", [])
     wall_cladding_data = []
 
     for kitchen in kitchens:
         for floor in kitchen["floors"]:
             for canopy in floor["canopies"]:
-                print("Canopy data:", canopy.get('wallCladding'), canopy.get('cladding_desc'))
-                
-                if canopy.get('wallCladding') and canopy.get('wallCladding') != '':
+                # Only process canopies that have wallCladding set to True and have cladding_desc
+                if canopy.get('wallCladding') and canopy.get('cladding_desc'):
                     # Get the selected walls
                     selected_walls = canopy.get('cladding_desc', [])
                     
-                    # Create description based on selected walls
                     if selected_walls:
                         wall_parts = []
                         if 'Rear' in selected_walls:  # Put Rear first
@@ -269,18 +360,24 @@ def get_wall_cladding(kitchen_info):
                             else:
                                 wall_description = f"Cladding to {wall_parts[0]}-hand Wall"
                         else:
-                            wall_description = "Cladding below item, supplied and installed"
+                            continue  # Skip if no walls selected
                     else:
-                        wall_description = "Cladding below item, supplied and installed"
+                        continue  # Skip if no cladding description
+
+                    # Get cladding price and round up to nearest integer
+                    cladding_price = canopy.get('cladding_price', 0)
+                    if isinstance(cladding_price, (int, float)):
+                        cladding_price = math.ceil(cladding_price)
 
                     wall_cladding_data.append({
-                        "item_no": str(canopy.get('itemNum', '1')),
+                        "item_no": str(canopy.get('item_number', '1')),
                         "description": wall_description,
                         "width": canopy.get("cladding_width", 0),
                         "height": canopy.get("cladding_height", 0),
+                        "price": cladding_price  # Store rounded price
                     })
 
-    print(f"DEBUG - Final wall_cladding_data: {wall_cladding_data}")
+    # Only return data if we found canopies with cladding
     return wall_cladding_data if wall_cladding_data else None
 
 def generate_email_summary(genInfo, kitchen_info, scope_work):

@@ -839,7 +839,7 @@ def main(genInfo):
                                 width = st.number_input("Width", min_value=0, key=f'width_{i}_{floor}_{canopy}')
                                 special_works = st.multiselect(
                                     'Special Works (Max 2)',
-                                    ['ROUND CORNERS', 'CUT OUT', 'CASTELLE LOCKING ', 'HEADER DUCT S/S', 'HEADER DUCT ', 'PAINT FINISH', 'UV ON DEMAND', 'E/over for emergency strip light', 'E/over for small emer. spot light', 'E/over for large emer. spot light', 'COLD MIST ON DEMAND', 'CMW  PIPEWORK HWS/CWS', 'CANOPY GROUND SUPPORT', ' 2nd EXTRACT PLENUM', 'SUPPLY AIR PLENUM', 'CAPTUREJET PLENUM', 'COALESCER'],
+                                    ['ROUND CORNERS', 'CUT OUT', 'CASTELLE LOCKING ', 'HEADER DUCT S/S', 'HEADER DUCT ', 'PAINT FINSH', 'UV ON DEMAND', 'E/over for emergency strip light', 'E/over for small emer. spot light', 'E/over for large emer. spot light', 'COLD MIST ON DEMAND', 'CMW  PIPEWORK HWS/CWS', 'CANOPY GROUND SUPPORT', ' 2nd EXTRACT PLENUM', 'SUPPLY AIR PLENUM', 'CAPTUREJET PLENUM', 'COALESCER'],
                                     key=f'specialWorks_{i}_{floor}_{canopy}',
                                     max_selections=2
                                 )
@@ -906,9 +906,6 @@ def main(genInfo):
 
                                         
                                     CWS_HWS_pipework = st.selectbox("CWS/HWS Pipework", [1,2,3,4,5], key=f'pipework_{i}_{floor}_{canopy}')
-
-                            # Assuming WW_pods selection is already defined
-                            
 
                             # Create a dictionary for this canopy
                             canopy_data = {
@@ -1082,15 +1079,8 @@ def main(genInfo):
             # Create a copy of the uploaded file in memory
             excel_data = BytesIO(uploaded_file.getvalue())
             
-            # Load workbook
+            # Load workbook with data_only=True to get calculated values
             wb_data = openpyxl.load_workbook(excel_data, data_only=True)
-            excel_data.seek(0)
-            wb = openpyxl.load_workbook(excel_data, data_only=False)
-            
-            # Save the Excel file to BytesIO
-            modified_excel = BytesIO()
-            wb.save(modified_excel)
-            modified_excel.seek(0)
             
             # Initialize total P182
             total_p182 = 0
@@ -1127,7 +1117,7 @@ def main(genInfo):
                         try:
                             if isinstance(p182_value, str):
                                 p182_value = p182_value.replace('£', '').replace(',', '').strip()
-                            p182_values[sheet_name] = float(p182_value)
+                            p182_values[sheet_name] = math.ceil(float(p182_value))  # Round up P182
                             st.write(f"Found P182 value in sheet {sheet_name}: {p182_value}")
                         except (ValueError, TypeError) as e:
                             st.error(f"Error processing P182 value from sheet {sheet_name}: {e}")
@@ -1211,13 +1201,11 @@ def main(genInfo):
                             
                             # Assign prices and extract static values to canopies in order
                             for canopy, price, extract_static in zip(floor_data['canopies'], prices, extract_statics):
-                                canopy['total_price'] = price
+                                canopy['total_price'] = math.ceil(price)  # Round up canopy price
                                 canopy['extract_static'] = extract_static
                             
                             st.write(f"For {kitchen_name} - {floor_name}:")
-                            st.write(f"  P182: {p182_value}")
-                            st.write(f"  Canopy Prices: {[c.get('total_price', 0) for c in floor_data['canopies']]}")
-                            st.write(f"  Extract Static Values: {[c.get('extract_static', 0) for c in floor_data['canopies']]}")
+                            st.write(f"  P182: {math.ceil(p182_value)}")  # Show rounded P182
 
             # Create a dictionary for kitchen totals
             kitchen_totals = {}
@@ -1243,7 +1231,8 @@ def main(genInfo):
                         try:
                             if isinstance(n9_value, str):
                                 n9_value = n9_value.replace('£', '').replace(',', '').strip()
-                            kitchen_total += float(f"{math.ceil(float(n9_value))}.00")
+                            # Round up the N9 value
+                            kitchen_total += math.ceil(float(n9_value))
                         except (ValueError, TypeError) as e:
                             st.error(f"Error processing N9 value from {sheet_name}: {e}")
                 
@@ -1269,7 +1258,8 @@ def main(genInfo):
                                             try:
                                                 if isinstance(price_cell, str):
                                                     price_cell = price_cell.replace('£', '').replace(',', '').strip()
-                                                canopy['cladding_price'] = float(f"{math.ceil(float(price_cell))}.00")
+                                                # Round up the cladding price
+                                                canopy['cladding_price'] = math.ceil(float(price_cell))
                                             except (ValueError, TypeError) as e:
                                                 st.error(f"Error processing cladding price for {canopy.get('item_number')}: {e}")
                                     
@@ -1282,7 +1272,8 @@ def main(genInfo):
                                                 try:
                                                     if isinstance(price_cell, str):
                                                         price_cell = price_cell.replace('£', '').replace(',', '').strip()
-                                                    uv_prices.append(float(f"{math.ceil(float(price_cell))}.00"))
+                                                    # Round up UV prices
+                                                    uv_prices.append(math.ceil(float(price_cell)))
                                                 except (ValueError, TypeError) as e:
                                                     st.error(f"Error processing UV price from N{uv_row + i}: {e}")
                                         canopy['uv_component_prices'] = uv_prices
@@ -1307,57 +1298,134 @@ def main(genInfo):
                 # Store kitchen total after processing all floors
                 kitchen_totals[kitchen_name] = kitchen_total
 
-            # Add kitchen_totals to word context
-            word_context = {
-                'kitchens': kitchen_info,
-                'grouped_canopy_data': grouped_canopy_data,
-                'kitchen_totals': kitchen_totals  # Add the totals dictionary
-            }
-
-            # Generate Word document
-            word_file = CW.generate_word(word_context, genInfo)
-            
-            if word_file is None:
-                st.error("Error: Word document generation returned None")
-                return
-            
-            # Create ZIP with all files
-            zip_buffer = BytesIO()
-            with zipfile.ZipFile(zip_buffer, 'w') as zf:
-                # Add the uploaded Excel file directly with its original name
-                uploaded_file.seek(0)  # Reset file pointer to start
-                zf.writestr(uploaded_file.name, uploaded_file.read())
+            # First calculate all totals
+            try:
+                # Sum up all kitchen totals for T16
+                total_job_price = sum(math.ceil(total) for total in kitchen_totals.values())
                 
-                # Add Word file
-                zf.writestr("Halton Quotation.docx", word_file.getvalue())
+                # Get K9 totals from each sheet using data_only workbook
+                total_k9_cost = 0
+                for sheet_name in wb_data.sheetnames:  # Use wb_data instead of wb
+                    if sheet_name.startswith('CANOPY - '):
+                        sheet = wb_data[sheet_name]  # Use wb_data to get calculated values
+                        k9_value = sheet['K9'].value
+                        if k9_value is not None:
+                            try:
+                                if isinstance(k9_value, str):
+                                    k9_value = k9_value.replace('£', '').replace(',', '').strip()
+                                total_k9_cost += math.ceil(float(k9_value))
+                                st.write(f"K9 value from {sheet_name}: £{math.ceil(float(k9_value))}")
+                            except (ValueError, TypeError) as e:
+                                st.error(f"Error processing K9 value from {sheet_name}: {e}")
                 
-                # Add JSON file with all inputs
-                project_data = {
-                    'session_state': {
-                        k: v for k, v in st.session_state.items() 
-                        if not k.startswith('_') and not k.startswith('customer')
-                    },
-                    'kitchen_info': kitchen_info,
+                # Now create the word context with the calculated totals
+                word_context = {
+                    'kitchens': kitchen_info,
                     'grouped_canopy_data': grouped_canopy_data,
-                    'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    'kitchen_totals': kitchen_totals,  # Add the totals dictionary
+                    'total_k9_cost': total_k9_cost,    # Add S16 total
+                    'total_job_price': total_job_price  # Add T16 total
                 }
+
+                # Generate Word document
+                word_file = CW.generate_word(word_context, genInfo)
                 
-                json_str = json.dumps(project_data, indent=2)
-                project_name = st.session_state.get('projectNum', 'project')
-                zf.writestr(
-                    f"{project_name}_data.json",
-                    json_str.encode('utf-8')
-                )
-            
-            zip_buffer.seek(0)
-            
-            # Provide download button for the ZIP file
-            st.download_button(
-                label="⬇️ Download Final Package",
-                data=zip_buffer,
-                file_name=f"{genInfo['projectNum']}_Package.zip",
-                mime="application/zip"
-            )
+                # Write to JOB TOTAL sheet in the formula workbook
+                if 'JOB TOTAL' in wb_data.sheetnames:  # Use wb_data for writing
+                    job_total_sheet = wb_data['JOB TOTAL']
+                    # Write total job price to T16
+                    job_total_sheet['T16'] = total_job_price
+                    # Write total costs to S16
+                    job_total_sheet['S16'] = total_k9_cost
+                    
+                    st.write(f"Total Job Price (T16): £{total_job_price}")
+                    st.write(f"Total Costs (S16): £{total_k9_cost}")
+                    
+                    # Save the workbook with updated values
+                    modified_excel = BytesIO()
+                    wb_data.save(modified_excel)
+                    modified_excel.seek(0)
+                    
+                    # Extract N193 and N19 values before creating ZIP
+                    for kitchen in kitchen_info:
+                        for floor in kitchen.get('floors', []):
+                            # Find matching sheet for this floor
+                            for sheet_name in wb_data.sheetnames:
+                                if sheet_name.startswith('CANOPY - '):
+                                    if floor['floor_name'] in sheet_name and kitchen['kitchen_name'][:8] in sheet_name:
+                                        item_sheet = wb_data[sheet_name]
+                                        
+                                        # Get N193 value (test & commission price)
+                                        n193_cell = item_sheet['N193']
+                                        if n193_cell.value is not None:
+                                            try:
+                                                if isinstance(n193_cell.value, str):
+                                                    n193_value = n193_cell.value.replace('£', '').replace(',', '').strip()
+                                                else:
+                                                    n193_value = n193_cell.value
+                                                floor['test_commission'] = math.ceil(float(n193_value))
+                                                st.write(f"N193 value for {sheet_name}: {n193_value}")  # Debug print
+                                            except (ValueError, TypeError) as e:
+                                                st.error(f"Error processing N193 value: {e}")
+                                                floor['test_commission'] = 0
+                                        
+                                        # Get N19 value (total price)
+                                        n19_cell = item_sheet['N19']
+                                        if n19_cell.value is not None:
+                                            try:
+                                                if isinstance(n19_cell.value, str):
+                                                    n19_value = n19_cell.value.replace('£', '').replace(',', '').strip()
+                                                else:
+                                                    n19_value = n19_cell.value
+                                                floor['total_price'] = math.ceil(float(n19_value))
+                                                st.write(f"N19 value for {sheet_name}: {n19_value}")  # Debug print
+                                            except (ValueError, TypeError) as e:
+                                                st.error(f"Error processing N19 value: {e}")
+                                                floor['total_price'] = 0
+                    
+                    # Now create ZIP package with updated data
+                    zip_buffer = BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w') as zf:
+                        # Add the modified Excel file
+                        modified_excel.seek(0)
+                        zf.writestr(uploaded_file.name, modified_excel.getvalue())
+                        
+                        # Add Word file with updated test_commission values
+                        word_file = CW.generate_word(word_context, genInfo)
+                        zf.writestr("Halton Quotation.docx", word_file.getvalue())
+                        
+                        # Add JSON file
+                        project_data = {
+                            'session_state': {
+                                k: v for k, v in st.session_state.items() 
+                                if not k.startswith('_') and not k.startswith('customer')
+                            },
+                            'kitchen_info': kitchen_info,
+                            'grouped_canopy_data': grouped_canopy_data,
+                            'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        }
+                        
+                        json_str = json.dumps(project_data, indent=2)
+                        project_name = st.session_state.get('projectNum', 'project')
+                        zf.writestr(
+                            f"{project_name}_data.json",
+                            json_str.encode('utf-8')
+                        )
+                    
+                    zip_buffer.seek(0)
+                    
+                    # Provide download button for the ZIP file
+                    st.download_button(
+                        label="⬇️ Download Final Package",
+                        data=zip_buffer,
+                        file_name=f"{genInfo['projectNum']}_Package.zip",
+                        mime="application/zip"
+                    )
+                else:
+                    st.error("JOB TOTAL sheet not found in workbook")
+
+            except Exception as e:
+                st.error(f"Error processing files: {str(e)}")
 
         except Exception as e:
             st.error(f"Error generating files: {str(e)}")
