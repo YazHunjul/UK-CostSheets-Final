@@ -15,8 +15,9 @@ import math
 from ..config import TEMPLATES
 import json
 from datetime import datetime
+from openpyxl.worksheet.datavalidation import DataValidation
 
-
+canopyWithCladding =[]
 def get_initials(name):
     """Extract initials from a name"""
     if name:
@@ -415,7 +416,6 @@ def main(genInfo):
         # Main sections navigation
         st.markdown("#### Main Sections:")
         st.markdown("[📋 General Information](#general_info)")
-        st.markdown("[📦 Delivery & Installation](#delivery)")
         st.markdown("[💾 Generate Files](#generate)")
         
         # Floor-Area navigation
@@ -430,338 +430,7 @@ def main(genInfo):
             
             for floor in range(num_floors):
                 floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
-                
-                # Get canopy info for this floor
-                canopy_summary = []
-                canopy_key = f'canopies_input_{i}_{floor}'
-                if canopy_key in st.session_state:
-                    num_canopies = st.session_state[canopy_key]
-                    models = {}
-                    
-                    for c in range(num_canopies):
-                        model_key = f'model_{i}_{floor}_{c}'
-                        if model_key in st.session_state:
-                            model = st.session_state[model_key]
-                            models[model] = models.get(model, 0) + 1
-                    
-                    for model, count in models.items():
-                        if model:
-                            canopy_summary.append(f"{count}x {model}")
-                
-                summary_text = f"{kitchen_name} - {floor_name}"
-                if canopy_summary:
-                    summary_text += f"\n({', '.join(canopy_summary)})"
-                
-                st.markdown(f"[{summary_text}](#floor_{i}_{floor})")
-
-        # Add separator for Canopy Details
-        st.markdown("---")
-        
-        # Make Canopy Details expandable
-        with st.expander("🏗️ Current Canopy Details", expanded=False):
-            has_canopies = False
-            
-            # Get current canopy details from session state
-            for i in range(num_kitchens):
-                num_floors = st.session_state.get(f'floors_input_{i}', 1)
-                for floor in range(num_floors):
-                    canopy_key = f'canopies_input_{i}_{floor}'
-                    if canopy_key in st.session_state:
-                        num_canopies = st.session_state[canopy_key]
-                        for c in range(num_canopies):
-                            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
-                            floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
-                            
-                            # Use collapsible markdown for each canopy
-                            has_canopies = True
-                            st.markdown(f"<details><summary><b>{kitchen_name} - {floor_name} (Canopy {c + 1})</b></summary>", unsafe_allow_html=True)
-                            
-                            # Define all possible fields with their correct session state keys
-                            fields = {
-                                'itemNum': ('📌 Reference Number', 'Reference Number'),
-                                'model': ('🔧 Model', 'Model'),
-                                'config': ('⚙️ Configuration', 'Configuration'),
-                                'width': ('📏 Width', 'Width'),
-                                'length': ('📏 Length', 'Length'),
-                                'height': ('📏 Height', 'Height'),
-                                'section': ('🔢 Section', 'Section'),
-                                'flowRate': ('💨 Flow Rate', 'Flow Rate'),
-                                'light_type': ('💡 Light Type', 'Light Type'),
-                                'cladding': ('🧱 Wall Cladding', 'Wall Cladding'),
-                                'control_panel': ('🎛️ Control Panel', 'Control Panel'),
-                                'WW_pods': ('💧 WW Pods', 'WW Pods'),
-                                'WW_pods_quantity': ('🔢 WW Pods Quantity', 'WW Pods Quantity'),
-                                'pipework': ('🔧 Pipework', 'Pipework')
-                            }
-                            
-                            # Track filled and missing fields
-                            filled_fields = []
-                            missing_fields = []
-                            
-                            # Get model to check for CMWI/CMWF fields
-                            model = st.session_state.get(f'model_{i}_{floor}_{c}')
-                            
-                            # Check each field
-                            for field_key, (icon, label) in fields.items():
-                                value = st.session_state.get(f'{field_key}_{i}_{floor}_{c}')
-                                
-                                # Skip CMWI/CMWF specific fields if not applicable
-                                if field_key in ['control_panel', 'WW_pods', 'WW_pods_quantity', 'pipework']:
-                                    if model not in ['CMWI', 'CMWF']:
-                                        continue
-                                
-                                # Consider a field filled if it has any value (including 0) or is False
-                                if value is not None and value != '':
-                                    # Format the value display
-                                    if field_key in ['width', 'length', 'height']:
-                                        display_value = f"{value} mm"
-                                    elif field_key == 'flowRate':
-                                        display_value = f"{value} m³/s"
-                                    elif field_key == 'cladding':
-                                        display_value = 'Yes' if value else 'No'
-                                    else:
-                                        display_value = str(value)
-                                    
-                                    filled_fields.append((icon, label, display_value))
-                                else:
-                                    missing_fields.append((icon, label))
-                            
-                            # Show filled fields
-                            if filled_fields:
-                                st.markdown("<div style='margin-left: 20px'>", unsafe_allow_html=True)
-                                st.markdown("**✅ Filled Fields:**")
-                                for icon, label, value in filled_fields:
-                                    st.markdown(f"{icon} {label}: {value}")
-                                st.markdown("</div>", unsafe_allow_html=True)
-                            
-                            # Show missing fields
-                            if missing_fields:
-                                st.markdown("<div style='margin-left: 20px'>", unsafe_allow_html=True)
-                                st.markdown("**❌ Missing Fields:**")
-                                for icon, label in missing_fields:
-                                    st.markdown(f"{icon} {label}")
-                                st.markdown("</div>", unsafe_allow_html=True)
-                            
-                            st.markdown("</details>", unsafe_allow_html=True)
-                            st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
-            
-            if not has_canopies:
-                st.markdown("No canopies created yet.")
-
-        # Add final separator before Project Summary
-        st.markdown("---")
-        
-        # Project Summary
-        st.markdown("### 📊 Project Summary")
-        
-        # Check for missing general info
-        missing_info = []
-        required_fields = {
-            'projectName': 'Project Name',
-            'projectNum': 'Project Number',
-            'customer': 'Customer',
-            'sales_contact': 'Sales Contact',
-            'estimator': 'Estimator',
-            'location': 'Location',
-            'address': 'Address'
-        }
-        
-        for field, display_name in required_fields.items():
-            if not genInfo.get(field):
-                missing_info.append(display_name)
-        
-        if missing_info:
-            st.markdown("#### ⚠️ Missing Information:")
-            for field in missing_info:
-                st.markdown(f"- {field}")
-        
-        # Canopy Summary
-        st.markdown("#### 🏗️ Canopy Overview:")
-        total_canopies = 0
-        model_counts = {}
-        
-        # Iterate through session state to count canopies
-        for i in range(num_kitchens):
-            num_floors = st.session_state.get(f'floors_input_{i}', 1)
-            for floor in range(num_floors):
-                canopy_key = f'canopies_input_{i}_{floor}'
-                if canopy_key in st.session_state:
-                    num_canopies = st.session_state[canopy_key]
-                    total_canopies += num_canopies
-                    
-                    # Count models
-                    for c in range(num_canopies):
-                        model_key = f'model_{i}_{floor}_{c}'
-                        if model_key in st.session_state:
-                            model = st.session_state[model_key]
-                            if model:  # Only count if model is selected
-                                model_counts[model] = model_counts.get(model, 0) + 1
-        
-        st.markdown(f"Total Canopies: {total_canopies}")
-        if model_counts:
-            st.markdown("Models:")
-            for model, count in model_counts.items():
-                st.markdown(f"- {model}: {count}")
-        
-        # Add any warnings about missing canopy data
-        st.markdown("#### ⚠️ Missing Canopy Data:")
-        missing_data = False
-        
-        # Check session state for missing canopy data
-        for i in range(num_kitchens):
-            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
-            num_floors = st.session_state.get(f'floors_input_{i}', 1)
-            
-            for floor in range(num_floors):
-                floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
-                canopy_key = f'canopies_input_{i}_{floor}'
-                
-                if canopy_key in st.session_state:
-                    num_canopies = st.session_state[canopy_key]
-                    for c in range(num_canopies):
-                        missing_fields = []
-                        
-                        # Check all required fields
-                        field_checks = {
-                            'itemNum': 'Reference Number',
-                            'model': 'Model',
-                            'config': 'Configuration',
-                            'width': 'Width',
-                            'length': 'Length',
-                            'section': 'Section',
-                            'height': 'Height',
-                            'flowRate': 'Flow Rate',
-                            'light_type': 'Light Type'
-                        }
-                        
-                        for field, display_name in field_checks.items():
-                            field_key = f'{field}_{i}_{floor}_{c}'
-                            value = st.session_state.get(field_key)
-                            if not value and value != 0:  # Check for empty or None, but allow 0
-                                missing_fields.append(display_name)
-                        
-                        # Check light quantity if light type is selected and not a strip light
-                        light_type = st.session_state.get(f'light_type_{i}_{floor}_{c}')
-                        if light_type and not any(x in light_type for x in ['L6', 'L12', 'L18']):
-                            light_qty_key = f'light_qty_{i}_{floor}_{c}'
-                            if not st.session_state.get(light_qty_key):
-                                missing_fields.append('Light Quantity')
-                        
-                        # Check CMWI/CMWF specific fields
-                        model = st.session_state.get(f'model_{i}_{floor}_{c}')
-                        if model in ['CMWI', 'CMWF']:
-                            cmwi_fields = {
-                                'control_panel': 'Control Panel',
-                                'WW_pods': 'WW Pods',
-                                'WW_pods_quantity': 'WW Pods Quantity',
-                                'pipework': 'Pipework'
-                            }
-                            for field, display_name in cmwi_fields.items():
-                                field_key = f'{field}_{i}_{floor}_{c}'
-                                if not st.session_state.get(field_key):
-                                    missing_fields.append(display_name)
-                        
-                        if missing_fields:
-                            missing_data = True
-                            st.markdown(f"**{kitchen_name} - {floor_name} (Canopy {c + 1}):**")
-                            st.markdown(f"- Missing: {', '.join(missing_fields)}")
-        
-        if not missing_data:
-            st.markdown("✅ All required canopy data complete")
-
-        # Add CMWF/CMWI specific summary
-        cmwf_count = 0
-        cmwi_count = 0
-        ww_pods_total = 0
-        
-        for i in range(num_kitchens):
-            num_floors = st.session_state.get(f'floors_input_{i}', 1)
-            for floor in range(num_floors):
-                canopy_key = f'canopies_input_{i}_{floor}'
-                if canopy_key in st.session_state:
-                    num_canopies = st.session_state[canopy_key]
-                    for c in range(num_canopies):
-                        model = st.session_state.get(f'model_{i}_{floor}_{c}')
-                        if model == 'CMWF':
-                            cmwf_count += 1
-                            pods_qty = st.session_state.get(f'WW_pods_quantity_{i}_{floor}_{c}', 0)
-                            ww_pods_total += pods_qty
-                        elif model == 'CMWI':
-                            cmwi_count += 1
-                            pods_qty = st.session_state.get(f'WW_pods_quantity_{i}_{floor}_{c}', 0)
-                            ww_pods_total += pods_qty
-        
-        if cmwf_count > 0 or cmwi_count > 0:
-            st.markdown("#### 💧 Water Wash Details:")
-            if cmwf_count > 0:
-                st.markdown(f"- CMWF Canopies: {cmwf_count}")
-            if cmwi_count > 0:
-                st.markdown(f"- CMWI Canopies: {cmwi_count}")
-            st.markdown(f"- Total WW Pods: {ww_pods_total}")
-
-        # Add delivery and installation checks
-        st.markdown("#### 🚚 Delivery & Installation Status:")
-        missing_delivery = False
-        
-        for i in range(num_kitchens):
-            kitchen_name = st.session_state.get(f'kitchen_name_{i}', f'Floor {i + 1}')
-            num_floors = st.session_state.get(f'floors_input_{i}', 1)
-            
-            for floor in range(num_floors):
-                floor_name = st.session_state.get(f'floor_name_{i}_{floor}', f'Area {floor + 1}')
-                key_suffix = f"kitchen_{i}_floor_{floor}"
-                
-                # Check required delivery & installation fields
-                missing_fields = []
-                
-                # Check delivery fields
-                location = st.session_state.get(f'location_{key_suffix}')
-                plant_hire = st.session_state.get(f'plant_hire_{key_suffix}')
-                plant_selection = st.session_state.get(f'plant_selection_{key_suffix}')
-                strip_out = st.session_state.get(f'strip_out_{key_suffix}')
-                overnight = st.session_state.get(f'overnight_{key_suffix}')
-                normal_hours = st.session_state.get(f'normal_hours_{key_suffix}')
-                after_hours = st.session_state.get(f'after_hours_{key_suffix}')
-                wall_cladding_install = st.session_state.get(f'wall_cladding_install_{key_suffix}')
-                gas_interlock = st.session_state.get(f'gas_interlock_{key_suffix}')
-                co_sensor = st.session_state.get(f'co_sensor_{key_suffix}')
-                co2_sensor = st.session_state.get(f'co2_sensor_{key_suffix}')
-                bms_interface = st.session_state.get(f'bms_interface_{key_suffix}')
-                
-                # Add missing fields to list with more descriptive labels
-                if not location:
-                    missing_fields.append("Location")
-                if plant_hire and not plant_selection:  # Only check plant selection if plant hire is selected
-                    missing_fields.append("Plant Selection")
-                if strip_out is None:  # Check if strip out value is set
-                    missing_fields.append("Strip Out Cost")
-                if overnight is None:
-                    missing_fields.append("Overnight/Travel Expenses")
-                if normal_hours is None:
-                    missing_fields.append("Installation Normal Hours")
-                if after_hours is None:
-                    missing_fields.append("Installation After Hours")
-                if wall_cladding_install is None:
-                    missing_fields.append("Wall Cladding Installation")
-                if gas_interlock is None:
-                    missing_fields.append("Gas Interlock")
-                if co_sensor is None:
-                    missing_fields.append("CO Sensor")
-                if co2_sensor is None:
-                    missing_fields.append("CO2 Sensor")
-                if bms_interface is None:
-                    missing_fields.append("BMS Interface")
-                
-                if missing_fields:
-                    missing_delivery = True
-                    st.markdown(f"**{kitchen_name} - {floor_name}:**")
-                    st.markdown("Missing:")
-                    for field in missing_fields:
-                        st.markdown(f"❌ {field}")
-                    st.markdown("---")
-        
-        if not missing_delivery:
-            st.markdown("✅ All delivery & installation details complete")
+                st.markdown(f"[{kitchen_name} - {floor_name}](#floor_{i}_{floor})")
 
     # Main form content
     for i in range(num_kitchens):
@@ -801,71 +470,12 @@ def main(genInfo):
                         for canopy in range(num_canopies):
                             st.markdown(f"<h4 style='text-align:center;'>Canopy {canopy + 1} - Floor: ({floor_name})</h4>", unsafe_allow_html=True)
 
-                            coll1, coll2, coll3, coll4 = st.columns(4)
+                            coll1, coll2, coll3 = st.columns(3)
                             with coll1:
                                 item_number = st.text_input('Reference Number', key=f'itemNum_{i}_{floor}_{canopy}')
-                                length = st.number_input("Length", min_value=0, key=f'length_{i}_{floor}_{canopy}')
-                                section = st.number_input('Sections', min_value=0, key=f'section_{i}_{floor}_{canopy}')
-
-                                # Get configuration value from session state since it's defined in coll2
-                                config_key = f'config_{i}_{floor}_{canopy}'
-                                if config_key in st.session_state and st.session_state[config_key] == "ISLAND":
-                                    st.caption(f"Total sections for ISLAND configuration: {section * 2}")
-
-                                light_type = st.selectbox(
-                                    'Light Type',
-                                    ['','LED STRIP L6 Inc DALI', 'LED STRIP L12 inc DALI', 'LED STRIP L18 Inc DALI', 'Small LED Spots inc DALI', 'LARGE LED Spots inc DALI'],
-                                    key=f'light_type_{i}_{floor}_{canopy}'
-                                )
-                                
-                                # Check if it's a strip light (L6, L12, L18)
-                                is_strip_light = any(x in light_type for x in ['L6', 'L12', 'L18'])
-                                
-                                # Set quantity to sections for strip lights, otherwise show input
-                                light_quantity = None
-                                if light_type:  # Only if a light type is selected
-                                    if is_strip_light:
-                                        light_quantity = section
-                                        st.text(f"Quantity: {section} (Based on sections)")
-                                    else:
-                                        light_quantity = st.number_input(
-                                            'Light Quantity', 
-                                            min_value=0, 
-                                            key=f'light_qty_{i}_{floor}_{canopy}'
-                                        )
 
                             with coll2:
                                 configuration = st.selectbox('Configuration', ['WALL', "ISLAND"], key=f'config_{i}_{floor}_{canopy}')
-                                width = st.number_input("Width", min_value=0, key=f'width_{i}_{floor}_{canopy}')
-                                special_works = st.multiselect(
-                                    'Special Works (Max 2)',
-                                    ['ROUND CORNERS', 'CUT OUT', 'CASTELLE LOCKING ', 'HEADER DUCT S/S', 'HEADER DUCT ', 'PAINT FINSH', 'UV ON DEMAND', 'E/over for emergency strip light', 'E/over for small emer. spot light', 'E/over for large emer. spot light', 'COLD MIST ON DEMAND', 'CMW  PIPEWORK HWS/CWS', 'CANOPY GROUND SUPPORT', ' 2nd EXTRACT PLENUM', 'SUPPLY AIR PLENUM', 'CAPTUREJET PLENUM', 'COALESCER'],
-                                    key=f'specialWorks_{i}_{floor}_{canopy}',
-                                    max_selections=2
-                                )
-                                
-                                # Warn if trying to select more than 2
-                                if len(special_works) > 2:
-                                    st.warning("Only the first 2 special works will be included")
-                                    special_works = special_works[:2]
-                                
-                                # Initialize special works dictionary
-                                special_works_dict = {}
-                                
-                                # For each selected special work (max 2), add a quantity input
-                                for work in special_works:
-                                    quantity = st.number_input(
-                                        f'{work} Quantity',
-                                        min_value=1,
-                                        value=1,
-                                        key=f'specialWorks_qty_{i}_{floor}_{canopy}_{work}'
-                                    )
-                                    special_works_dict[work] = quantity
-
-                            # Initialize cladding variables with defaults
-                            cladding_height = None
-                            cladding_width = None
-                            description = None
 
                             with coll3:
                                 model = st.selectbox(
@@ -873,62 +483,69 @@ def main(genInfo):
                                     ['KVF', 'KVX-M', "KVI", "UVX", "UVX-M", "UVI", "UVF", "UV-C POD", "CMWI", "CMWF", "CXW", "CXW-M", "KVV"], 
                                     key=f'model_{i}_{floor}_{canopy}'
                                 )
-                                height = st.number_input("Height", min_value=0, value=555, key=f'height_{i}_{floor}_{canopy}')
-                                cladding = st.selectbox(
-                                    "Wall Cladding",
+
+                            # Initialize cladding variables
+                            cladding_length = 0
+                            cladding_height = 0
+                            cladding_desc = []
+
+                            # Add wall cladding selection
+                            cladding_col1, cladding_col2, cladding_col3 = st.columns(3)
+                            with cladding_col1:
+                                wall_cladding = st.selectbox(
+                                    'Wall Cladding',
                                     ['', '2M² (HFL)'],
-                                    key=f'cladding_{i}_{floor}_{canopy}'
+                                    key=f'wall_cladding_{i}_{floor}_{canopy}'
                                 )
-                                if cladding:
-                                    cladding_height = st.number_input("Cladding Height", key=f'cladding_Height{i}_{floor}_{canopy}', min_value=0)
-                                    cladding_width = st.number_input("Cladding Length", key=f'CladdingLength_{i}_{floor}_{canopy}', min_value=0)
-                                    description = st.multiselect('Cladding Description', ['','Rear', 'Left', "Right" ], key=f'cladding_desc_{i}_{floor}_{canopy}')
 
-                            # Initialize CMWI/CMWF specific variables with defaults
-                            control_panel = None
-                            WW_pods = None
-                            CWS_HWS_pipework = None
-                            WW_pods_quantity = 0
-                            with coll4:
-                                flowrate = st.number_input('Enter Flow Rate', min_value=0.0, key=f'flowRate_{i}_{floor}_{canopy}')
-                                if model in ['CMWI', 'CMWF']:
-                                    control_panel = st.selectbox('Select Control Panel', ['CP1S', 'CP2S', 'CP3S', 'CP4S'], key=f'CP_{i}_{floor}_{canopy}')
-                                    WW_pods = st.selectbox("W/W Pods", ['1000-S', '1500-S', '2000-S', '2500-S', '3000-S', '1000-D', '1500-D', '2000-D', '2000-D', '2500-D', '3000-D'], key=f'WW_{i}_{floor}_{canopy}')
-                                    
-                                    if WW_pods:  # Only show quantity if a W/W pod is selected
-                                        WW_pods_quantity = st.number_input(
-                                        f"{WW_pods} Quantity",
+                            st.write(f"Debug - Selected wall cladding: {wall_cladding}")  # Debug print
+
+                            # Only show additional cladding fields if 2M² (HFL) is selected
+                            if wall_cladding == '2M² (HFL)':
+                                with cladding_col2:
+                                    cladding_length = st.number_input(
+                                        "Length",
                                         min_value=0,
-                                        value=0,
-                                        step=1,
-                                        key=f'WW_qty_{i}_{floor}_{canopy}'
-                                    ) 
+                                        key=f'cladding_length_{i}_{floor}_{canopy}'
+                                    )
+                                with cladding_col3:
+                                    cladding_height = st.number_input(
+                                        "Height",
+                                        min_value=0,
+                                        key=f'cladding_height_{i}_{floor}_{canopy}'
+                                    )
+                                
+                                # Wall selection
+                                cladding_desc = st.multiselect(
+                                    "Select Walls",
+                                    options=["Rear", "Left", "Right"],
+                                    key=f'cladding_desc_{i}_{floor}_{canopy}'
+                                )
 
-                                        
-                                    CWS_HWS_pipework = st.selectbox("CWS/HWS Pipework", [1,2,3,4,5], key=f'pipework_{i}_{floor}_{canopy}')
-
-                            # Create a dictionary for this canopy
+                            # Create canopy data dictionary
                             canopy_data = {
                                 'item_number': item_number,
                                 'model': model,
                                 'configuration': configuration,
-                                'section': section,
-                                'height': height,
-                                'width': width,
-                                'length': length,
-                                'lights': light_type,
-                                'light_quantity': light_quantity,
-                                'flowrate': flowrate,
-                                'specialWorks': special_works_dict,
-                                'wallCladding': cladding,
-                                'control_panel': control_panel,
-                                'WW_pods': WW_pods,
-                                'pipework': CWS_HWS_pipework,
-                                'cladding_width': cladding_width,
+                                'section': 0,
+                                'height': 0,
+                                'width': 0,
+                                'length': 0,
+                                'lights': '',
+                                'light_quantity': 0,
+                                'flowrate': 0.0,
+                                'specialWorks': {},
+                                'control_panel': '',
+                                'WW_pods': '',
+                                'pipework': 0,
+                                'WW_pods_quantity': 0,
+                                'wallCladding': wall_cladding,  # Add wall cladding selection
+                                'cladding_length': cladding_length,  # No need for conditional here
                                 'cladding_height': cladding_height,
-                                'cladding_desc': description,
-                                'WW_pods_quantity': WW_pods_quantity
+                                'cladding_desc': cladding_desc
                             }
+
+                            st.write(f"Debug - Canopy data wall cladding: {canopy_data.get('wallCladding')}")  # Debug print
 
                             # Append canopy data to the floor
                             floor_data["canopies"].append(canopy_data)
@@ -939,111 +556,10 @@ def main(genInfo):
             # Append kitchen data to the main list
             kitchen_info.append(kitchen_data)
 
-    # Delivery & Installation Section
-    st.markdown("<div id='delivery'></div>", unsafe_allow_html=True)
-    st.markdown("## 🚚 Delivery & Installation Details")
-    
-    # Iterate through all kitchens and their floors
-    for kitchen_idx, kitchen in enumerate(kitchen_info):
-        for floor_idx, floor in enumerate(kitchen['floors']):
-            floor_name = floor['floor_name']
-            kitchen_name = kitchen['kitchen_name']
-            
-            # Get delivery & installation details for this floor
-            delivery_install_data = get_delivery_install_details(
-                floor_name=f"{kitchen_name} - {floor_name}",
-                key_suffix=f"kitchen_{kitchen_idx}_floor_{floor_idx}"
-            )
-            
-            # Store delivery & installation data including P182 value
-            floor['delivery_install_data'] = delivery_install_data
-
-    st.markdown('<hr>', unsafe_allow_html=True)
-
-    # Add Email Summary Section
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        generate_email = st.checkbox("Generate Email Summary", value=False)
-    
-    # Email settings if enabled
-    if generate_email:
-        with st.expander("📧 Email Summary Settings", expanded=True):
-            st.markdown("### Email Template Settings")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                email_tone = st.selectbox(
-                    "Email Style",
-                    [
-                        "Professional",
-                        "Friendly Professional",
-                        "Casual Professional",
-                        "Enthusiastic",
-                        "Direct and Brief"
-                    ],
-                    index=0
-                )
-            
-            with col2:
-                email_focus = st.selectbox(
-                    "Email Focus",
-                    [
-                        "Standard Proposal",
-                        "Building Relationship",
-                        "Quick Update",
-                        "Technical Details",
-                        "Project Timeline"
-                    ],
-                    index=0
-                )
-            
-            # Split additional notes and closing message
-            col1, col2 = st.columns(2)
-            with col1:
-                additional_notes = st.text_area(
-                    "Project Context",
-                    placeholder="Any specific details about the project or client relationship...",
-                    height=100
-                )
-            
-            with col2:
-                closing_message = st.text_area(
-                    "Personal Touch",
-                    placeholder="e.g., 'Let's grab coffee to discuss this further' or 'Looking forward to our site visit next week'",
-                    height=100
-                )
-
-            # Store email preferences in genInfo
-            genInfo.update({
-                'generate_email': generate_email,
-                'email_tone': email_tone,
-                'email_focus': email_focus,
-                'additional_notes': additional_notes,
-                'closing_message': closing_message
-            })
-
-            # Create container for email content
-            email_container = st.container()
-
-            # Separate button for email generation
-            if st.button("Generate Email Summary"):
-                scope_work = CW.scope_of_works({'kitchens': kitchen_info})
-                email_summary = CW.generate_email_summary(genInfo, kitchen_info, scope_work)
-                if email_summary:
-                    with email_container:
-                        st.markdown("### Generated Email Summary")
-                        text_area = st.text_area(
-                            "Email Content",
-                            value=email_summary,
-                            height=300,
-                            key="email_text_area"
-                        )
-                        
-                        col1, col2 = st.columns([1, 4])
-                        with col1:
-                            if st.button("📋 Copy"):
-                                pyperclip.copy(text_area)
-                                st.success("Copied!")
+    # Remove the Delivery & Installation Section
+    # st.markdown("<div id='delivery'></div>", unsafe_allow_html=True)
+    # st.markdown("## 🚚 Delivery & Installation Details")
+    # ... remove the entire delivery and installation section ...
 
     st.markdown('<hr>', unsafe_allow_html=True)
 
@@ -1053,7 +569,37 @@ def main(genInfo):
     st.markdown("### Step 1: Generate and Download Excel")
     if st.button("Generate Excel File"):
         try:
-            excel_bytes = CE.generate_sheet(kitchen_info, genInfo)
+            # Simplify the kitchen_info structure to only include essential data
+            basic_kitchen_info = []
+            for kitchen in kitchen_info:
+                basic_kitchen = {
+                    "kitchen_name": kitchen["kitchen_name"],
+                    "floors": []
+                }
+                
+                for floor in kitchen["floors"]:
+                    basic_floor = {
+                        "floor_name": floor["floor_name"],
+                        "canopies": []
+                    }
+                    
+                    for canopy in floor["canopies"]:
+                        # Include all necessary canopy information
+                        basic_canopy = {
+                            "item_number": canopy.get("item_number", ""),
+                            "model": canopy.get("model", ""),
+                            "configuration": canopy.get("configuration", ""),
+                            "wallCladding": canopy.get("wallCladding", ""),  # Add wall cladding
+                            "cladding_length": canopy.get("cladding_length", 0),
+                            "cladding_height": canopy.get("cladding_height", 0),
+                            "cladding_desc": canopy.get("cladding_desc", [])
+                        }
+                        basic_floor["canopies"].append(basic_canopy)
+                    
+                    basic_kitchen["floors"].append(basic_floor)
+                basic_kitchen_info.append(basic_kitchen)
+
+            excel_bytes = CE.generate_sheet(basic_kitchen_info, genInfo)
             if excel_bytes is None:
                 st.error("Error generating Excel sheet: No data returned.")
                 return
@@ -1064,11 +610,11 @@ def main(genInfo):
                 file_name=f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            st.info("1. Download the Excel file\n2. Open it in Excel\n3. Let Excel calculate the values\n4. Make Sure To Save the file and upload below")
+            st.info("1. Download the Excel file\n2. Fill in the detailed specifications in Excel\n3. Let Excel calculate the values\n4. Save the file and upload below")
             
         except Exception as e:
             st.error(f"Error generating Excel: {str(e)}")
-    
+
     # Upload section
     st.markdown("### Step 2: Upload Processed Excel")
     uploaded_file = st.file_uploader("Upload Excel file after calculations", type=['xlsx'])
@@ -1076,359 +622,80 @@ def main(genInfo):
     if uploaded_file is not None:
         try:
             st.write("Loading Excel file...")
-            # Create a copy of the uploaded file in memory
             excel_data = BytesIO(uploaded_file.getvalue())
             
-            # Load workbook with data_only=True to get calculated values
+            # Load template workbook for dropdowns
+            template_path = TEMPLATES['EXCEL']
+            template_wb = openpyxl.load_workbook(template_path)
+            
+            # Load workbooks for processing
+            wb_data_with_formulas = openpyxl.load_workbook(excel_data)
+            excel_data.seek(0)
             wb_data = openpyxl.load_workbook(excel_data, data_only=True)
             
-            # Initialize total P182
-            total_p182 = 0
-
-            # Initialize grouped_canopy_data first
-            grouped_canopy_data = {}
-            for kitchen in kitchen_info:
-                kitchen_name = kitchen['kitchen_name']
-                grouped_canopy_data[kitchen_name] = {}
-                for floor in kitchen['floors']:
-                    floor_name = floor['floor_name']
-                    floor['p182_value'] = 0.0  # Initialize p182_value in the floor data
-                    grouped_canopy_data[kitchen_name][floor_name] = {
-                        'canopies': floor['canopies'],
-                        'floor_name': floor['floor_name'],
-                        'delivery_install_data': floor.get('delivery_install_data', {}),
-                        'p182': 0.0,  # Initialize p182 with 0
-                        'floor_data': {
-                            'cladding_total': 0,
-                            'uv_total': 0
-                        }
-                    }
+            # Extract data and update totals as before
+            extracted_data = extract_data_from_excel(wb_data)
             
-            # First pass: Collect P182 values and canopy prices from each canopy sheet
-            p182_values = {}
-            canopy_prices = {}  # New dictionary to store canopy prices
-            for sheet_name in wb_data.sheetnames:
-                if sheet_name.startswith('CANOPY - '):
-                    item_sheet = wb_data[sheet_name]
-                    
-                    # Get P182 value
-                    p182_value = item_sheet['P182'].value
-                    if p182_value is not None:
-                        try:
-                            if isinstance(p182_value, str):
-                                p182_value = p182_value.replace('£', '').replace(',', '').strip()
-                            p182_values[sheet_name] = math.ceil(float(p182_value))  # Round up P182
-                            st.write(f"Found P182 value in sheet {sheet_name}: {p182_value}")
-                        except (ValueError, TypeError) as e:
-                            st.error(f"Error processing P182 value from sheet {sheet_name}: {e}")
-                    
-                    # Get canopy prices and extract static values
-                    current_row = 12  # Start row for prices
-                    extract_row = 22  # Start row for extract static
-                    sheet_prices = []
-                    extract_statics = []  # List to store extract static values
-                    
-                    while True:
-                        # Get price
-                        price_cell = item_sheet[f'P{current_row}'].value
-                        if price_cell is None:
-                            break
-                        
-                        # Get extract static from column F
-                        extract_static = item_sheet[f'F{extract_row}'].value
-                        
-                        try:
-                            if isinstance(price_cell, str):
-                                price_cell = price_cell.replace('£', '').replace(',', '').strip()
-                            sheet_prices.append(float(price_cell))
-                            
-                            # Process extract static value
-                            if extract_static is not None:
-                                if isinstance(extract_static, str):
-                                    extract_static = extract_static.replace('Pa', '').strip()
-                                extract_statics.append(float(extract_static))
-                            else:
-                                extract_statics.append(0.0)
-                            
-                            st.write(f"Found in {sheet_name}:")
-                            st.write(f"  Price at P{current_row}: {price_cell}")
-                            st.write(f"  Extract Static at F{extract_row}: {extract_static}")
-                        except (ValueError, TypeError) as e:
-                            st.error(f"Error processing values at row {current_row}: {e}")
-                        
-                        current_row += 17  # Move to next canopy section
-                        extract_row += 17  # Move to next extract static value
-                    
-                    if sheet_prices:
-                        canopy_prices[sheet_name] = sheet_prices
-                        # Store extract static values with the same sheet name
-                        canopy_prices[f"{sheet_name}_extract_static"] = extract_statics
-
-            # Update floor data with both P182 and canopy prices
-            for kitchen_name, kitchen in grouped_canopy_data.items():
-                for floor_name, floor_data in kitchen.items():
-                    # Try different sheet name formats
-                    possible_sheet_names = [
-                        f"CANOPY - {kitchen_name} ({floor_name})",
-                        f"CANOPY - {kitchen_name} ({floor_name[:8]}",
-                        f"CANOPY - {floor_name} ({kitchen_name})",
-                        f"CANOPY - {floor_name} ({kitchen_name[:8]}"
-                    ]
-                    
-                    # Find matching sheet
-                    matching_sheet = None
-                    for sheet_name in p182_values.keys():
-                        if any(possible_name in sheet_name for possible_name in possible_sheet_names):
-                            matching_sheet = sheet_name
-                            break
-                    
-                    if matching_sheet:
-                        # Add P182 value
-                        p182_value = p182_values[matching_sheet]
-                        floor_data['p182'] = p182_value
-                        
-                        # Store at both levels to ensure consistency
-                        for kitchen in kitchen_info:
-                            for floor in kitchen['floors']:
-                                if floor['floor_name'] == floor_name:
-                                    floor['p182_value'] = p182_value
-                                    break
-                        
-                        # Add canopy prices and extract static values if available
-                        if matching_sheet in canopy_prices:
-                            prices = canopy_prices[matching_sheet]
-                            extract_statics = canopy_prices.get(f"{matching_sheet}_extract_static", [])
-                            
-                            # Assign prices and extract static values to canopies in order
-                            for canopy, price, extract_static in zip(floor_data['canopies'], prices, extract_statics):
-                                canopy['total_price'] = math.ceil(price)  # Round up canopy price
-                                canopy['extract_static'] = extract_static
-                            
-                            st.write(f"For {kitchen_name} - {floor_name}:")
-                            st.write(f"  P182: {math.ceil(p182_value)}")  # Show rounded P182
-
-            # Create a dictionary for kitchen totals
-            kitchen_totals = {}
+            # Update JOB TOTAL and general info
+            if 'JOB TOTAL' in wb_data_with_formulas.sheetnames:
+                job_total_sheet = wb_data_with_formulas['JOB TOTAL']
+                
+                # Write totals
+                job_total_sheet['S16'] = extracted_data['total_costs']
+                job_total_sheet['T16'] = extracted_data['total_job_price']
+                
+                # Write general info
+                job_total_sheet['C3'] = genInfo.get('projectNum', '')
+                job_total_sheet['C5'] = genInfo.get('customer', '')
+                job_total_sheet['C7'] = genInfo.get('combined_initials', '')
+                job_total_sheet['G3'] = genInfo.get('projectName', '')
+                job_total_sheet['G5'] = genInfo.get('location', '')
+                job_total_sheet['G7'] = genInfo.get('date', '')
             
-            # Before generating Word document, restructure the data
-            grouped_canopy_data = {}
-            for kitchen in kitchen_info:
-                kitchen_name = kitchen['kitchen_name']
-                grouped_canopy_data[kitchen_name] = {}
-                kitchen_total = 0
+            # Copy dropdowns from template to modified workbook
+            copy_dropdowns(template_wb, wb_data_with_formulas)
+            
+            # Save the modified workbook
+            modified_excel = BytesIO()
+            wb_data_with_formulas.save(modified_excel)
+            modified_excel.seek(0)
+            
+            # Generate Word document
+            word_file = CW.generate_word(extracted_data, genInfo)
+            
+            # Create ZIP with modified Excel file
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Add modified Excel file
+                zip_file.writestr(
+                    f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx",
+                    modified_excel.getvalue()  # Use modified Excel file
+                )
                 
-                # First get all sheets for this kitchen to sum N9
-                kitchen_sheets = []
-                for sheet_name in wb_data.sheetnames:
-                    if sheet_name.startswith('CANOPY - ') and kitchen['kitchen_name'][:8] in sheet_name:
-                        kitchen_sheets.append(sheet_name)
-                
-                # Sum N9 from all kitchen sheets
-                for sheet_name in kitchen_sheets:
-                    item_sheet = wb_data[sheet_name]
-                    n9_value = item_sheet['N9'].value
-                    if n9_value is not None:
-                        try:
-                            if isinstance(n9_value, str):
-                                n9_value = n9_value.replace('£', '').replace(',', '').strip()
-                            # Round up the N9 value
-                            kitchen_total += math.ceil(float(n9_value))
-                        except (ValueError, TypeError) as e:
-                            st.error(f"Error processing N9 value from {sheet_name}: {e}")
-                
-                # Process each floor
+                # Add Word file
+                zip_file.writestr(
+                    f"{genInfo['projectNum']} Quotation.docx",
+                    word_file.getvalue()
+                )
+            
+            # Provide download button for ZIP file
+            st.download_button(
+                label="⬇️ Download ZIP (Excel + Word)",
+                data=zip_buffer.getvalue(),
+                file_name=f"{genInfo['projectNum']} Documents.zip",
+                mime="application/zip"
+            )
+            
+            # Optional: Display some summary
+            st.write("### Summary")
+            st.write(f"Total Job Price: £{extracted_data['total_job_price']:,.2f}")
+            for kitchen in extracted_data['kitchens']:
+                st.write(f"\n{kitchen['kitchen_name']}")
                 for floor in kitchen['floors']:
-                    floor_name = floor['floor_name']
-                    
-                    # Find matching sheet for this floor
-                    for sheet_name in wb_data.sheetnames:
-                        if sheet_name.startswith('CANOPY - '):
-                            if floor['floor_name'] in sheet_name and kitchen['kitchen_name'][:8] in sheet_name:
-                                item_sheet = wb_data[sheet_name]
-                                
-                                # Process each canopy
-                                current_row = 19  # Start at N19 for cladding
-                                uv_row = 24      # Start at N24 for UV components
-                                
-                                for canopy in floor['canopies']:
-                                    # Get cladding price if applicable
-                                    if canopy.get('wallCladding'):
-                                        price_cell = item_sheet[f'N{current_row}'].value
-                                        if price_cell is not None:
-                                            try:
-                                                if isinstance(price_cell, str):
-                                                    price_cell = price_cell.replace('£', '').replace(',', '').strip()
-                                                # Round up the cladding price
-                                                canopy['cladding_price'] = math.ceil(float(price_cell))
-                                            except (ValueError, TypeError) as e:
-                                                st.error(f"Error processing cladding price for {canopy.get('item_number')}: {e}")
-                                    
-                                    # Get UV component prices if it's a UV canopy
-                                    if 'UV' in canopy.get('model', ''):
-                                        uv_prices = []
-                                        for i in range(3):  # Get 3 component prices
-                                            price_cell = item_sheet[f'N{uv_row + i}'].value
-                                            if price_cell is not None:
-                                                try:
-                                                    if isinstance(price_cell, str):
-                                                        price_cell = price_cell.replace('£', '').replace(',', '').strip()
-                                                    # Round up UV prices
-                                                    uv_prices.append(math.ceil(float(price_cell)))
-                                                except (ValueError, TypeError) as e:
-                                                    st.error(f"Error processing UV price from N{uv_row + i}: {e}")
-                                        canopy['uv_component_prices'] = uv_prices
-                                    
-                                    current_row += 17    # Move to next canopy's cladding price
-                                    uv_row += 17        # Move to next canopy's UV prices
-                                
-                                break
-                    
-                    # Store floor data with all required fields
-                    grouped_canopy_data[kitchen_name][floor_name] = {
-                        'canopies': floor['canopies'],
-                        'floor_name': floor['floor_name'],
-                        'delivery_install_data': floor.get('delivery_install_data', {}),
-                        'p182': floor['p182_value'],  # Use the stored value directly
-                        'floor_data': {
-                            'cladding_total': 0,
-                            'uv_total': 0
-                        }
-                    }
-                
-                # Store kitchen total after processing all floors
-                kitchen_totals[kitchen_name] = kitchen_total
-
-            # First calculate all totals
-            try:
-                # Sum up all kitchen totals for T16
-                total_job_price = sum(math.ceil(total) for total in kitchen_totals.values())
-                
-                # Get K9 totals from each sheet using data_only workbook
-                total_k9_cost = 0
-                for sheet_name in wb_data.sheetnames:  # Use wb_data instead of wb
-                    if sheet_name.startswith('CANOPY - '):
-                        sheet = wb_data[sheet_name]  # Use wb_data to get calculated values
-                        k9_value = sheet['K9'].value
-                        if k9_value is not None:
-                            try:
-                                if isinstance(k9_value, str):
-                                    k9_value = k9_value.replace('£', '').replace(',', '').strip()
-                                total_k9_cost += math.ceil(float(k9_value))
-                                st.write(f"K9 value from {sheet_name}: £{math.ceil(float(k9_value))}")
-                            except (ValueError, TypeError) as e:
-                                st.error(f"Error processing K9 value from {sheet_name}: {e}")
-                
-                # Now create the word context with the calculated totals
-                word_context = {
-                    'kitchens': kitchen_info,
-                    'grouped_canopy_data': grouped_canopy_data,
-                    'kitchen_totals': kitchen_totals,  # Add the totals dictionary
-                    'total_k9_cost': total_k9_cost,    # Add S16 total
-                    'total_job_price': total_job_price  # Add T16 total
-                }
-
-                # Generate Word document
-                word_file = CW.generate_word(word_context, genInfo)
-                
-                # Write to JOB TOTAL sheet in the formula workbook
-                if 'JOB TOTAL' in wb_data.sheetnames:  # Use wb_data for writing
-                    job_total_sheet = wb_data['JOB TOTAL']
-                    # Write total job price to T16
-                    job_total_sheet['T16'] = total_job_price
-                    # Write total costs to S16
-                    job_total_sheet['S16'] = total_k9_cost
-                    
-                    st.write(f"Total Job Price (T16): £{total_job_price}")
-                    st.write(f"Total Costs (S16): £{total_k9_cost}")
-                    
-                    # Save the workbook with updated values
-                    modified_excel = BytesIO()
-                    wb_data.save(modified_excel)
-                    modified_excel.seek(0)
-                    
-                    # Extract N193 and N19 values before creating ZIP
-                    for kitchen in kitchen_info:
-                        for floor in kitchen.get('floors', []):
-                            # Find matching sheet for this floor
-                            for sheet_name in wb_data.sheetnames:
-                                if sheet_name.startswith('CANOPY - '):
-                                    if floor['floor_name'] in sheet_name and kitchen['kitchen_name'][:8] in sheet_name:
-                                        item_sheet = wb_data[sheet_name]
-                                        
-                                        # Get N193 value (test & commission price)
-                                        n193_cell = item_sheet['N193']
-                                        if n193_cell.value is not None:
-                                            try:
-                                                if isinstance(n193_cell.value, str):
-                                                    n193_value = n193_cell.value.replace('£', '').replace(',', '').strip()
-                                                else:
-                                                    n193_value = n193_cell.value
-                                                floor['test_commission'] = math.ceil(float(n193_value))
-                                                st.write(f"N193 value for {sheet_name}: {n193_value}")  # Debug print
-                                            except (ValueError, TypeError) as e:
-                                                st.error(f"Error processing N193 value: {e}")
-                                                floor['test_commission'] = 0
-                                        
-                                        # Get N19 value (total price)
-                                        n19_cell = item_sheet['N19']
-                                        if n19_cell.value is not None:
-                                            try:
-                                                if isinstance(n19_cell.value, str):
-                                                    n19_value = n19_cell.value.replace('£', '').replace(',', '').strip()
-                                                else:
-                                                    n19_value = n19_cell.value
-                                                floor['total_price'] = math.ceil(float(n19_value))
-                                                st.write(f"N19 value for {sheet_name}: {n19_value}")  # Debug print
-                                            except (ValueError, TypeError) as e:
-                                                st.error(f"Error processing N19 value: {e}")
-                                                floor['total_price'] = 0
-                    
-                    # Now create ZIP package with updated data
-                    zip_buffer = BytesIO()
-                    with zipfile.ZipFile(zip_buffer, 'w') as zf:
-                        # Add the modified Excel file
-                        modified_excel.seek(0)
-                        zf.writestr(uploaded_file.name, modified_excel.getvalue())
-                        
-                        # Add Word file with updated test_commission values
-                        word_file = CW.generate_word(word_context, genInfo)
-                        zf.writestr("Halton Quotation.docx", word_file.getvalue())
-                        
-                        # Add JSON file
-                        project_data = {
-                            'session_state': {
-                                k: v for k, v in st.session_state.items() 
-                                if not k.startswith('_') and not k.startswith('customer')
-                            },
-                            'kitchen_info': kitchen_info,
-                            'grouped_canopy_data': grouped_canopy_data,
-                            'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        }
-                        
-                        json_str = json.dumps(project_data, indent=2)
-                        project_name = st.session_state.get('projectNum', 'project')
-                        zf.writestr(
-                            f"{project_name}_data.json",
-                            json_str.encode('utf-8')
-                        )
-                    
-                    zip_buffer.seek(0)
-                    
-                    # Provide download button for the ZIP file
-                    st.download_button(
-                        label="⬇️ Download Final Package",
-                        data=zip_buffer,
-                        file_name=f"{genInfo['projectNum']}_Package.zip",
-                        mime="application/zip"
-                    )
-                else:
-                    st.error("JOB TOTAL sheet not found in workbook")
-
-            except Exception as e:
-                st.error(f"Error processing files: {str(e)}")
-
+                    st.write(f"  {floor['floor_name']}: {len(floor['canopies'])} canopies")
+            
         except Exception as e:
-            st.error(f"Error generating files: {str(e)}")
+            st.error(f"Error processing files: {str(e)}")
 
     # Use the names from general_info
   
@@ -1477,4 +744,548 @@ def canopy_main():
         fill_dummy_kitchen_data()
     
     # Rest of your existing code...
+
+def extract_data_from_excel(wb_data):
+    """Extract all canopy data from uploaded Excel file"""
+    kitchen_info = []
+    p182_values = {}  # Store P182 values for each sheet
+    canopy_prices = {}  # Store canopy prices for each sheet
+    
+    def get_numeric_value(cell_ref, sheet=None, default=0):
+        """Helper function to safely get numeric value from cell reference or cell object"""
+        try:
+            # Get the value from either cell reference or cell object
+            if isinstance(cell_ref, str) and sheet:
+                cell = sheet[cell_ref]
+                value = cell.value if cell else None
+            elif hasattr(cell_ref, 'value'):
+                value = cell_ref.value
+            else:
+                value = cell_ref
+
+            # Return default if empty
+            if value is None:
+                return default
+
+            # Handle Excel error values like #REF!, #N/A, etc.
+            if isinstance(value, str):
+                if value.startswith('#'):
+                    return default
+                # Handle values with units (like "422.8 Pa")
+                try:
+                    return float(value.split()[0])  # Take first part before space
+                except (ValueError, IndexError):
+                    return default
+
+            # If it's already a number, return as is
+            if isinstance(value, (int, float)):
+                return value
+            
+            # Try converting string to int first
+            if isinstance(value, str) and value.strip().isdigit():
+                return int(value)
+            
+            # If not an integer, try float
+            return float(value)
+            
+        except (ValueError, TypeError, Exception):
+            return default
+
+    def get_cell_value(cell_ref, sheet=None, default=""):
+        """Helper function to safely get cell value"""
+        try:
+            # Get the value from either cell reference or cell object
+            if isinstance(cell_ref, str) and sheet:
+                cell = sheet[cell_ref]
+                value = cell.value if cell else None
+            elif hasattr(cell_ref, 'value'):
+                value = cell_ref.value
+            else:
+                value = cell_ref
+            
+            # Return default if empty
+            if value is None:
+                return default
+            
+            return str(value)
+        except Exception:  # Handle any errors (like empty cells)
+            return default
+
+    def should_skip_reference(ref):
+        """Check if reference number should be skipped"""
+        if not ref:
+            return True
+        ref = ref.strip().upper()
+        return ref in ["ITEM", "DELIVERY & INSTALLATION", "DELIVERY AND INSTALLATION"]
+
+    # Get all sheets that were created for kitchens/floors
+    for sheet_name in wb_data.sheetnames:
+        if sheet_name.startswith('CANOPY') and not sheet_name == 'CANOPY':
+            sheet = wb_data[sheet_name]
+            
+            # Get full names from hidden cells with defaults
+            kitchen_name = get_cell_value('Z1', sheet) or sheet.title[7:].split('-')[0].strip() or "Unknown Level"
+            floor_name = get_cell_value('Z2', sheet) or sheet.title[7:].split('-')[1].strip() or "Unknown Area"
+            
+            # Find or create kitchen in kitchen_info
+            kitchen = next((k for k in kitchen_info if k['kitchen_name'] == kitchen_name), None)
+            if not kitchen:
+                kitchen = {'kitchen_name': kitchen_name, 'floors': []}
+                kitchen_info.append(kitchen)
+            
+            # Create floor data with safe value extraction
+            floor_data = {
+                'floor_name': floor_name,
+                'canopies': [],
+                'p182_value': get_numeric_value('P182', sheet),
+                'total_price': get_numeric_value('N9', sheet),  # Total selling price for this floor
+                'total_cost': get_numeric_value('K9', sheet)   # Total cost for this floor
+            }
+            
+            # Store P182 value for this sheet
+            p182_values[sheet_name] = get_numeric_value('P182', sheet)
+            
+            # Extract canopy data
+            current_row = 12
+            while current_row <= sheet.max_row:
+                # Get item number and model first
+                item_number = get_cell_value(f'B{current_row}', sheet)
+                model = get_cell_value(f'D{current_row + 2}', sheet)
+                
+                # Only process canopies with valid item number and model
+                if item_number and model and not should_skip_reference(item_number):
+                    # Get all values first
+                    width = get_numeric_value(f'E{current_row + 2}', sheet)
+                    length = get_numeric_value(f'F{current_row + 2}', sheet)
+                    height = get_numeric_value(f'G{current_row + 2}', sheet)
+                    section = get_numeric_value(f'H{current_row + 2}', sheet)
+                    flowrate = get_numeric_value(f'I{current_row + 2}', sheet)
+                    lights = get_cell_value(f'C{current_row + 3}', sheet)
+                    light_quantity = get_numeric_value(f'D{current_row + 3}', sheet)
+                    
+                    # Get prices and static values
+                    canopy_price = get_numeric_value(f'P{current_row}', sheet)      # P12 for first canopy
+                    additional_costs = get_numeric_value(f'N{current_row + 14}', sheet)  # N26 for first canopy
+                    total_price = canopy_price + (additional_costs or 0)  # Sum canopy price and additional costs
+                    
+                    # Get lights value and standardize light types
+                    lights_str = str(lights).upper()  # Convert to uppercase for case-insensitive comparison
+                    
+                    # Set lights to '-' if it's 'LIGHT SELECTION'
+                    if lights_str == 'LIGHT SELECTION':
+                        lights = '-'
+                    elif 'LED STRIP' in lights_str:
+                        lights = 'LED STRIP'
+                    elif 'LED SPOT' in lights_str:
+                        lights = 'LED SPOTS'
+                    
+                    # Set extract static based on model
+                    if model == 'CXW':
+                        extract_static = 50
+                    else:
+                        extract_static = get_numeric_value(f'F{current_row + 10}', sheet)
+                    
+                    # Set makeup air and supply static based on model having 'F'
+                    has_fresh_air = 'F' in model
+                    makeup_air = get_numeric_value(f'I{current_row + 10}', sheet) if has_fresh_air else '-'
+                    supply_static = get_numeric_value(f'J{current_row + 10}', sheet) if has_fresh_air else '-'
+                    
+                    # Create base canopy data with required fields
+                    canopy_data = {
+                        'item_number': item_number,
+                        'configuration': get_cell_value(f'C{current_row + 2}', sheet),
+                        'model': model,
+                        'width': width,
+                        'length': length,
+                        'height': height,
+                        'section': section,
+                        'flowrate': flowrate,
+                        'extract_static': extract_static,
+                        'canopy_price': canopy_price,
+                        'additional_costs': additional_costs,
+                        'total_price': total_price,
+                        'p182_value': get_numeric_value('P182', sheet),
+                        'lights': lights,
+                        'makeup_air': makeup_air,
+                        'supply_static': supply_static,
+                        # Add wall cladding data
+                        'wallCladding': get_cell_value(f'C{current_row + 7}', sheet),  # C19 for first canopy
+                        'cladding_length': get_numeric_value(f'D{current_row + 7}', sheet),
+                        'cladding_height': get_numeric_value(f'E{current_row + 7}', sheet),
+                        'cladding_desc': parse_cladding_description(get_cell_value(f'F{current_row + 7}', sheet))
+                    }
+                    
+                    # Add lights if they exist
+                    if lights:
+                        canopy_data['lights'] = lights
+                        if light_quantity:
+                            canopy_data['light_quantity'] = light_quantity
+                    
+                    # Handle special works
+                    special_works = {
+                        get_cell_value(f'C{current_row + 4}', sheet): get_numeric_value(f'D{current_row + 4}', sheet),
+                        get_cell_value(f'C{current_row + 5}', sheet): get_numeric_value(f'D{current_row + 5}', sheet)
+                    }
+                    # Only include non-empty special works with non-zero quantities
+                    special_works = {k: v for k, v in special_works.items() 
+                                    if k and k != "SELECT WORKS" and v}
+                    if special_works:
+                        canopy_data['specialWorks'] = special_works
+                    
+                    # Handle wall cladding
+                    wall_cladding = get_cell_value(f'C{current_row + 7}', sheet)
+                    if wall_cladding:
+                        canopy_data['wallCladding'] = wall_cladding
+                        cladding_length = get_numeric_value(f'D{current_row + 7}', sheet)
+                        cladding_height = get_numeric_value(f'E{current_row + 7}', sheet)
+                        canopy_data['cladding_length'] = cladding_length
+                        canopy_data['cladding_height'] = cladding_height
+                        cladding_desc = parse_cladding_description(get_cell_value(f'F{current_row + 7}', sheet))
+                        if cladding_desc:
+                            canopy_data['cladding_desc'] = cladding_desc
+                    
+                    # Handle CMWI/CMWF specific fields
+                    if model in ['CMWI', 'CMWF']:
+                        control_panel = get_cell_value(f'C{current_row + 13}', sheet)
+                        ww_pods = get_cell_value(f'C{current_row + 14}', sheet)
+                        ww_qty = get_numeric_value(f'D{current_row + 14}', sheet)
+                        pipework = get_cell_value(f'C{current_row + 15}', sheet)
+                        
+                        if control_panel:
+                            canopy_data['control_panel'] = control_panel
+                        if ww_pods:
+                            canopy_data['WW_pods'] = ww_pods
+                            canopy_data['WW_pods_quantity'] = ww_qty
+                        if pipework:
+                            canopy_data['pipework'] = pipework
+                    
+                    floor_data['canopies'].append(canopy_data)
+                
+                current_row += 17
+            
+            # Only add floors that have valid canopies
+            if floor_data['canopies']:
+                kitchen['floors'].append(floor_data)
+                # Store canopy prices for this sheet (with safe access)
+                canopy_prices[sheet_name] = [
+                    get_numeric_value(f'P{row}', sheet)  # Get price from P12 (base canopy price)
+                    for row in range(12, sheet.max_row, 17)  # Step through canopy rows
+                    if (get_cell_value(f'B{row}', sheet) and 
+                        get_cell_value(f'D{row + 2}', sheet) and 
+                        not should_skip_reference(get_cell_value(f'B{row}', sheet)))  # Check reference number
+                ]
+    
+    # Remove any kitchens that have no floors with canopies
+    kitchen_info = [kitchen for kitchen in kitchen_info if kitchen['floors']]
+    
+    # Calculate totals from individual sheets
+    total_job_price = 0
+    total_costs = 0
+
+    for sheet_name in wb_data.sheetnames:
+        if sheet_name.startswith('CANOPY') and sheet_name != 'CANOPY':
+            sheet = wb_data[sheet_name]
+            
+            # Get totals directly from N9 and K9 of each sheet
+            sheet_total_price = get_numeric_value('N9', sheet)  # Total selling price from N9
+            sheet_total_cost = get_numeric_value('K9', sheet)   # Total cost from K9
+            
+            # Add to overall totals
+            total_job_price += sheet_total_price
+            total_costs += sheet_total_cost
+            
+            # Debug output
+            st.write(f"Sheet {sheet_name} totals:")
+            st.write(f"- Total Price (N9): {sheet_total_price}")
+            st.write(f"- Total Cost (K9): {sheet_total_cost}")
+
+    # Write the calculated totals to JOB TOTAL sheet
+    if 'JOB TOTAL' in wb_data.sheetnames:
+        job_total_sheet = wb_data['JOB TOTAL']
+        job_total_sheet['S16'] = total_costs      # Write sum of all K9s
+        job_total_sheet['T16'] = total_job_price  # Write sum of all N9s
+
+    # Round prices to integers using ceiling when adding to extracted_data
+    extracted_data = {
+        'kitchens': kitchen_info,
+        'p182_values': p182_values,
+        'canopy_prices': canopy_prices,
+        'total_job_price': math.ceil(total_job_price),  # Ceiling round
+        'total_costs': math.ceil(total_costs)           # Ceiling round
+    }
+
+    # Also ceiling round prices in kitchen_info
+    for kitchen in kitchen_info:
+        for floor in kitchen['floors']:
+            floor['total_price'] = math.ceil(floor['total_price'])
+            floor['total_cost'] = math.ceil(floor['total_cost'])
+            floor['p182_value'] = math.ceil(floor['p182_value'])
+            
+            for canopy in floor['canopies']:
+                canopy['total_price'] = math.ceil(canopy['total_price'])
+                canopy['canopy_price'] = math.ceil(canopy['canopy_price'])
+                if 'additional_costs' in canopy:
+                    canopy['additional_costs'] = math.ceil(canopy['additional_costs'])
+                canopy['p182_value'] = math.ceil(canopy['p182_value'])
+    
+    return extracted_data
+
+def parse_cladding_description(desc):
+    """Extract wall selections from cladding description"""
+    if not desc:
+        return []
+    
+    walls = []
+    if 'Rear' in str(desc):
+        walls.append('Rear')
+    if 'Left' in str(desc):
+        walls.append('Left')
+    if 'Right' in str(desc):
+        walls.append('Right')
+    return walls
+
+def copy_dropdowns(source_wb, target_wb):
+    """Copy dropdown validations from source workbook to target workbook"""
+    # First, ensure Lists sheet exists and copy it
+    if 'Lists' in source_wb.sheetnames:
+        # Copy Lists sheet if it doesn't exist in target
+        if 'Lists' not in target_wb.sheetnames:
+            target_wb.create_sheet('Lists')
+        
+        source_lists = source_wb['Lists']
+        target_lists = target_wb['Lists']
+        
+        # Copy all values from Lists sheet
+        for row in source_lists.rows:
+            for cell in row:
+                if cell.value is not None:
+                    target_lists[cell.coordinate] = cell.value
+
+        # Define dropdowns configuration
+        dropdowns = {
+            'configuration': {
+                'options': ['WALL', 'ISLAND'],
+                'column': 'A',
+                'target_col': 'C',
+                'row_offset': 2  # C14 for first canopy (12 + 2)
+            },
+            'model': {
+                'options': ['KVF', 'KVX-M', 'KVI', 'UVX', 'UVX-M', 'UVI', 'UVF', 'UV-C POD', 'CMWI', 'CMWF', 'CXW', 'CXW-M', 'KVV'],
+                'column': 'B',
+                'target_col': 'D',
+                'row_offset': 2  # D14 for first canopy
+            },
+            'lights': {
+                'options': ['LED Strip Light', 'LED Light', 'LED High Power'],
+                'column': 'C',
+                'target_col': 'C',
+                'row_offset': 3  # C15 for first canopy
+            },
+            'wall_cladding': {
+                'options': ['', '2M² (HFL)'],
+                'column': 'D',
+                'target_col': 'C',
+                'row_offset': 7  # C19 for first canopy
+            },
+            'control_panel': {
+                'options': ['CP1S', 'CP2S', 'CP3S', 'CP4S'],
+                'column': 'E',
+                'target_col': 'C',
+                'row_offset': 13  # C25 for first canopy
+            },
+            'ww_pods': {
+                'options': ['1000-S', '1500-S', '2000-S', '2500-S', '3000-S', '1000-D', '1500-D', '2000-D', '2500-D', '3000-D'],
+                'column': 'F',
+                'target_col': 'C',
+                'row_offset': 14  # C26 for first canopy
+            }
+        }
+
+        # Create dropdowns for each CANOPY sheet
+        for sheet_name in target_wb.sheetnames:
+            if sheet_name.startswith('CANOPY') and sheet_name != 'CANOPY':
+                sheet = target_wb[sheet_name]
+                
+                # Write options to Lists sheet and create validations
+                for name, config in dropdowns.items():
+                    # Write options to Lists sheet
+                    for i, option in enumerate(config['options'], 1):
+                        target_lists[f"{config['column']}{i}"] = option
+                    
+                    # Create range reference
+                    range_ref = f"Lists!${config['column']}$1:${config['column']}${len(config['options'])}"
+                    
+                    # Create validation
+                    dv = DataValidation(
+                        type="list",
+                        formula1=range_ref,
+                        allow_blank=True
+                    )
+                    sheet.add_data_validation(dv)
+                    
+                    # Apply validation to cells
+                    current_row = 12  # Starting row
+                    while current_row <= sheet.max_row:
+                        dv.add(f"{config['target_col']}{current_row + config['row_offset']}")
+                        current_row += 17  # Move to next canopy section
+
+def save_form_data(kitchen_info, genInfo):
+    """Save form data to JSON"""
+    data = {
+        'kitchen_info': kitchen_info,
+        'genInfo': genInfo
+    }
+    
+    # Create JSON buffer
+    json_buffer = BytesIO()
+    json_buffer.write(json.dumps(data, indent=2).encode())
+    json_buffer.seek(0)
+    
+    return json_buffer
+
+def load_form_data(json_file):
+    """Load form data from JSON file"""
+    try:
+        data = json.loads(json_file.read().decode())
+        return data.get('kitchen_info', []), data.get('genInfo', {})
+    except Exception as e:
+        st.error(f"Error loading JSON data: {str(e)}")
+        return [], {}
+
+# In the main UI section:
+st.markdown("### Save/Load Project Data")
+col1, col2 = st.columns(2)
+
+# Save current form data
+with col1:
+    if st.button("Save Project Data"):
+        json_buffer = save_form_data(kitchen_info, genInfo)
+        st.download_button(
+            label="⬇️ Download Project Data",
+            data=json_buffer.getvalue(),
+            file_name=f"{genInfo['projectNum']}_project_data.json",
+            mime="application/json"
+        )
+
+# Load saved form data
+with col2:
+    uploaded_json = st.file_uploader("Load Project Data", type=['json'])
+    if uploaded_json:
+        loaded_kitchen_info, loaded_genInfo = load_form_data(uploaded_json)
+        if loaded_kitchen_info and loaded_genInfo:
+            # Auto-fill form fields
+            for key, value in loaded_genInfo.items():
+                if key in st.session_state:
+                    st.session_state[key] = value
+            
+            # Set kitchen count
+            st.session_state['num_kitchens'] = len(loaded_kitchen_info)
+            
+            # Fill kitchen data
+            for i, kitchen in enumerate(loaded_kitchen_info):
+                st.session_state[f'kitchen_name_{i}'] = kitchen['kitchen_name']
+                st.session_state[f'floors_input_{i}'] = len(kitchen['floors'])
+                
+                for j, floor in enumerate(kitchen['floors']):
+                    st.session_state[f'floor_name_{i}_{j}'] = floor['floor_name']
+                    st.session_state[f'canopies_input_{i}_{j}'] = len(floor['canopies'])
+                    
+                    for k, canopy in enumerate(floor['canopies']):
+                        for field, value in canopy.items():
+                            st.session_state[f'{field}_{i}_{j}_{k}'] = value
+
+# Upload section for both files
+st.markdown("### Step 2: Upload Files")
+col1, col2 = st.columns(2)
+
+with col1:
+    uploaded_json = st.file_uploader("Upload Project Data (Optional)", type=['json'])
+
+with col2:
+    uploaded_excel = st.file_uploader("Upload Excel file", type=['xlsx'])
+
+if uploaded_excel:
+    if uploaded_json:
+        # Load JSON data first
+        loaded_kitchen_info, loaded_genInfo = load_form_data(uploaded_json)
+        # Update genInfo with loaded data
+        genInfo.update(loaded_genInfo)
+    
+    # Process Excel file as before
+    try:
+        st.write("Loading files...")
+        excel_data = BytesIO(uploaded_file.getvalue())
+        
+        # Load template workbook for dropdowns
+        template_path = TEMPLATES['EXCEL']
+        template_wb = openpyxl.load_workbook(template_path)
+        
+        # Load workbooks for processing
+        wb_data_with_formulas = openpyxl.load_workbook(excel_data)
+        excel_data.seek(0)
+        wb_data = openpyxl.load_workbook(excel_data, data_only=True)
+        
+        # Extract data and update totals as before
+        extracted_data = extract_data_from_excel(wb_data)
+        
+        # Update JOB TOTAL and general info
+        if 'JOB TOTAL' in wb_data_with_formulas.sheetnames:
+            job_total_sheet = wb_data_with_formulas['JOB TOTAL']
+            
+            # Write totals
+            job_total_sheet['S16'] = extracted_data['total_costs']
+            job_total_sheet['T16'] = extracted_data['total_job_price']
+            
+            # Write general info
+            job_total_sheet['C3'] = genInfo.get('projectNum', '')
+            job_total_sheet['C5'] = genInfo.get('customer', '')
+            job_total_sheet['C7'] = genInfo.get('combined_initials', '')
+            job_total_sheet['G3'] = genInfo.get('projectName', '')
+            job_total_sheet['G5'] = genInfo.get('location', '')
+            job_total_sheet['G7'] = genInfo.get('date', '')
+        
+        # Copy dropdowns from template to modified workbook
+        copy_dropdowns(template_wb, wb_data_with_formulas)
+        
+        # Save the modified workbook
+        modified_excel = BytesIO()
+        wb_data_with_formulas.save(modified_excel)
+        modified_excel.seek(0)
+        
+        # Generate Word document
+        word_file = CW.generate_word(extracted_data, genInfo)
+        
+        # Create ZIP with modified Excel file
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Add modified Excel file
+            zip_file.writestr(
+                f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx",
+                modified_excel.getvalue()  # Use modified Excel file
+            )
+            
+            # Add Word file
+            zip_file.writestr(
+                f"{genInfo['projectNum']} Quotation.docx",
+                word_file.getvalue()
+            )
+        
+        # Provide download button for ZIP file
+        st.download_button(
+            label="⬇️ Download ZIP (Excel + Word)",
+            data=zip_buffer.getvalue(),
+            file_name=f"{genInfo['projectNum']} Documents.zip",
+            mime="application/zip"
+        )
+        
+        # Optional: Display some summary
+        st.write("### Summary")
+        st.write(f"Total Job Price: £{extracted_data['total_job_price']:,.2f}")
+        for kitchen in extracted_data['kitchens']:
+            st.write(f"\n{kitchen['kitchen_name']}")
+            for floor in kitchen['floors']:
+                st.write(f"  {floor['floor_name']}: {len(floor['canopies'])} canopies")
+                
+    except Exception as e:
+        st.error(f"Error processing files: {str(e)}")
   

@@ -23,6 +23,11 @@ def generate_word(context, genInfo):
         ref_num = genInfo.get('projectNum', '')
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
+        # Get just the first name of the customer
+        full_name = genInfo.get('customer', '')
+        first_name = full_name.split()[0] if full_name else ''  # Take first word as first name
+        genInfo['customer'] = first_name  # Update customer to just first name
+
         template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
         
         if not os.path.exists(template_path):
@@ -144,11 +149,11 @@ def scope_of_works(context):
 def extract_canopy_info_grouped(context):
     kitchens = context.get("kitchens", [])
     grouped_canopies = {}
-    
+
     for kitchen in kitchens:
         kitchen_name = kitchen["kitchen_name"].title()
         grouped_canopies[kitchen_name] = {}
-        
+
         for floor in kitchen["floors"]:
             floor_name = floor["floor_name"].title()
             display_name = f"{kitchen_name} – {floor_name}"
@@ -157,7 +162,7 @@ def extract_canopy_info_grouped(context):
             total_extract = 0
             total_makeup = 0
             has_fresh_air_canopy = False
-            
+
             for canopy in floor.get('canopies', []):
                 model = canopy.get('model', '')
                 # Check if model ends with 'F' for Fresh Air
@@ -193,26 +198,31 @@ def extract_canopy_info_grouped(context):
             delivery_data = floor.get('delivery_install_data', {})
             floor_subtotal += float(delivery_data.get('delivery_price', 0))
             floor_subtotal += float(delivery_data.get('install_price', 0))
-            # Add commissioning when implemented
             
             # Calculate cladding total and store cladding info
             cladding_total = 0
-            cladding_canopies = []  # New list to store canopies with cladding
+            cladding_canopies = []  # List of canopies with cladding
             
             for canopy in floor.get('canopies', []):
-                if canopy.get('wallCladding'):
+                # Debug prints
+                st.write(f"Checking canopy {canopy.get('item_number')}:")
+                st.write(f"- wallCladding: {canopy.get('wallCladding')}")
+                st.write(f"- cladding_desc: {canopy.get('cladding_desc')}")
+                
+                # Check if canopy has wallCladding and walls selected
+                if canopy.get('wallCladding') and canopy.get('cladding_desc'):
+                    st.write("Adding to cladding_canopies")
                     cladding_price = float(canopy.get('cladding_price', 0))
                     cladding_total += cladding_price
-                    # Store cladding info for this canopy
                     cladding_canopies.append({
-                        'item_number': canopy.get('item_number', '1'),
+                        'item_number': canopy.get('item_number', ''),
                         'model': canopy.get('model', ''),
                         'cladding_desc': canopy.get('cladding_desc', []),
                         'cladding_price': cladding_price,
-                        'width': canopy.get('cladding_width', 0),
+                        'width': canopy.get('cladding_length', 0),
                         'height': canopy.get('cladding_height', 0)
                     })
-            
+
             # Get commissioning price
             commission_price = float(floor.get('commission_price', 0))
             
@@ -225,14 +235,14 @@ def extract_canopy_info_grouped(context):
                 "important_note": important_note,
                 "floor_name": floor['floor_name'],
                 "p182": floor.get('p182_value', 0),
-                "test_commission": test_commission,  # Store the extracted C193 value
-                "commission_price": commission_price,  # Add commission price
+                "test_commission": test_commission,
+                "commission_price": commission_price,
                 "subtotal": round(floor_subtotal, 2),
                 "cladding_total": round(cladding_total, 2),
                 "floor_data": {
                     "cladding_total": round(cladding_total, 2),
                     "cladding_canopies": cladding_canopies,
-                    "test_commission": test_commission,  # Store here too
+                    "test_commission": test_commission,
                     "uv_total": 0,
                     "total_extract": total_extract,
                     "total_makeup": total_makeup,
@@ -339,42 +349,22 @@ def get_wall_cladding(kitchen_info):
     for kitchen in kitchens:
         for floor in kitchen["floors"]:
             for canopy in floor["canopies"]:
-                # Only process canopies that have wallCladding set to True and have cladding_desc
-                if canopy.get('wallCladding') and canopy.get('cladding_desc'):
-                    # Get the selected walls
-                    selected_walls = canopy.get('cladding_desc', [])
+                # Only process canopies that have wallCladding and cladding_desc
+                if (canopy.get('wallCladding') and 
+                    canopy.get('cladding_desc')):  # Check if walls were selected
                     
-                    if selected_walls:
-                        wall_parts = []
-                        if 'Rear' in selected_walls:  # Put Rear first
-                            wall_parts.append('Rear')
-                        if 'Left' in selected_walls:
-                            wall_parts.append('Left')
-                        if 'Right' in selected_walls:
-                            wall_parts.append('Right')
-                        
-                        if wall_parts:
-                            # Format as "Rear, Left & Right-hand Walls"
-                            if len(wall_parts) > 1:
-                                wall_description = f"Cladding to {', '.join(wall_parts[:-1])} & {wall_parts[-1]}-hand Walls"
-                            else:
-                                wall_description = f"Cladding to {wall_parts[0]}-hand Wall"
-                        else:
-                            continue  # Skip if no walls selected
+                    walls = canopy['cladding_desc']
+                    if len(walls) > 1:
+                        wall_description = f"Cladding to {', '.join(walls[:-1])} & {walls[-1]}-hand Walls"
                     else:
-                        continue  # Skip if no cladding description
-
-                    # Get cladding price and round up to nearest integer
-                    cladding_price = canopy.get('cladding_price', 0)
-                    if isinstance(cladding_price, (int, float)):
-                        cladding_price = math.ceil(cladding_price)
-
+                        wall_description = f"Cladding to {walls[0]}-hand Wall"
+                        
                     wall_cladding_data.append({
-                        "item_no": str(canopy.get('item_number', '1')),
+                        "item_no": str(canopy.get('item_number', '')),
                         "description": wall_description,
-                        "width": canopy.get("cladding_width", 0),
+                        "width": canopy.get("cladding_length", 0),
                         "height": canopy.get("cladding_height", 0),
-                        "price": cladding_price  # Store rounded price
+                        "price": math.ceil(canopy.get('cladding_price', 0))
                     })
 
     # Only return data if we found canopies with cladding
