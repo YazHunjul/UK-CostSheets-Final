@@ -745,290 +745,43 @@ def canopy_main():
     
     # Rest of your existing code...
 
-def extract_data_from_excel(wb_data):
+def extract_data_from_excel(wb):
     """Extract all canopy data from uploaded Excel file"""
     kitchen_info = []
     p182_values = {}  # Store P182 values for each sheet
+    n9_values = {}    # Store N9 values for each sheet
     canopy_prices = {}  # Store canopy prices for each sheet
     
     def get_numeric_value(cell_ref, sheet=None, default=0):
-        """Helper function to safely get numeric value from cell reference or cell object"""
+        """Get numeric value from cell, handling various formats"""
         try:
-            # Get the value from either cell reference or cell object
-            if isinstance(cell_ref, str) and sheet:
-                cell = sheet[cell_ref]
-                value = cell.value if cell else None
-            elif hasattr(cell_ref, 'value'):
-                value = cell_ref.value
-            else:
-                value = cell_ref
-
-            # Return default if empty
-            if value is None:
-                return default
-
-            # Handle Excel error values like #REF!, #N/A, etc.
+            value = sheet[cell_ref].value
             if isinstance(value, str):
-                if value.startswith('#'):
-                    return default
-                # Handle values with units (like "422.8 Pa")
-                try:
-                    return float(value.split()[0])  # Take first part before space
-                except (ValueError, IndexError):
-                    return default
-
-            # If it's already a number, return as is
-            if isinstance(value, (int, float)):
-                return value
-            
-            # Try converting string to int first
-            if isinstance(value, str) and value.strip().isdigit():
-                return int(value)
-            
-            # If not an integer, try float
-            return float(value)
-            
-        except (ValueError, TypeError, Exception):
+                value = value.replace('£', '').replace(',', '').strip()
+            return math.ceil(float(value)) if value else default
+        except:
             return default
 
-    def get_cell_value(cell_ref, sheet=None, default=""):
-        """Helper function to safely get cell value"""
-        try:
-            # Get the value from either cell reference or cell object
-            if isinstance(cell_ref, str) and sheet:
-                cell = sheet[cell_ref]
-                value = cell.value if cell else None
-            elif hasattr(cell_ref, 'value'):
-                value = cell_ref.value
-            else:
-                value = cell_ref
+    # Process each CANOPY sheet
+    for sheet_name in wb.sheetnames:
+        if sheet_name.startswith('CANOPY - '):
+            sheet = wb[sheet_name]
             
-            # Return default if empty
-            if value is None:
-                return default
-            
-            return str(value)
-        except Exception:  # Handle any errors (like empty cells)
-            return default
-
-    def should_skip_reference(ref):
-        """Check if reference number should be skipped"""
-        if not ref:
-            return True
-        ref = ref.strip().upper()
-        return ref in ["ITEM", "DELIVERY & INSTALLATION", "DELIVERY AND INSTALLATION"]
-
-    # Get all sheets that were created for kitchens/floors
-    for sheet_name in wb_data.sheetnames:
-        if sheet_name.startswith('CANOPY') and not sheet_name == 'CANOPY':
-            sheet = wb_data[sheet_name]
-            
-            # Get full names from hidden cells with defaults
-            kitchen_name = get_cell_value('Z1', sheet) or sheet.title[7:].split('-')[0].strip() or "Unknown Level"
-            floor_name = get_cell_value('Z2', sheet) or sheet.title[7:].split('-')[1].strip() or "Unknown Area"
-            
-            # Find or create kitchen in kitchen_info
-            kitchen = next((k for k in kitchen_info if k['kitchen_name'] == kitchen_name), None)
-            if not kitchen:
-                kitchen = {'kitchen_name': kitchen_name, 'floors': []}
-                kitchen_info.append(kitchen)
-            
-            # Create floor data with safe value extraction
-            floor_data = {
-                'floor_name': floor_name,
-                'canopies': [],
-                'p182_value': get_numeric_value('P182', sheet),
-                'total_price': get_numeric_value('N9', sheet),  # Total selling price for this floor
-                'total_cost': get_numeric_value('K9', sheet)   # Total cost for this floor
-            }
-            
-            # Store P182 value for this sheet
+            # Store P182 and N9 values for this sheet
             p182_values[sheet_name] = get_numeric_value('P182', sheet)
+            n9_values[sheet_name] = get_numeric_value('N9', sheet)
             
-            # Extract canopy data
-            current_row = 12
-            while current_row <= sheet.max_row:
-                # Get item number and model first
-                item_number = get_cell_value(f'B{current_row}', sheet)
-                model = get_cell_value(f'D{current_row + 2}', sheet)
-                
-                # Only process canopies with valid item number and model
-                if item_number and model and not should_skip_reference(item_number):
-                    # Get all values first
-                    width = get_numeric_value(f'E{current_row + 2}', sheet)
-                    length = get_numeric_value(f'F{current_row + 2}', sheet)
-                    height = get_numeric_value(f'G{current_row + 2}', sheet)
-                    section = get_numeric_value(f'H{current_row + 2}', sheet)
-                    flowrate = get_numeric_value(f'I{current_row + 2}', sheet)
-                    lights = get_cell_value(f'C{current_row + 3}', sheet)
-                    light_quantity = get_numeric_value(f'D{current_row + 3}', sheet)
-                    
-                    # Get prices and static values
-                    canopy_price = get_numeric_value(f'P{current_row}', sheet)      # P12 for first canopy
-                    additional_costs = get_numeric_value(f'N{current_row + 14}', sheet)  # N26 for first canopy
-                    total_price = canopy_price + (additional_costs or 0)  # Sum canopy price and additional costs
-                    
-                    # Get lights value and standardize light types
-                    lights_str = str(lights).upper()  # Convert to uppercase for case-insensitive comparison
-                    
-                    # Set lights to '-' if it's 'LIGHT SELECTION'
-                    if lights_str == 'LIGHT SELECTION':
-                        lights = '-'
-                    elif 'LED STRIP' in lights_str:
-                        lights = 'LED STRIP'
-                    elif 'LED SPOT' in lights_str:
-                        lights = 'LED SPOTS'
-                    
-                    # Set extract static based on model
-                    if model == 'CXW':
-                        extract_static = 50
-                    else:
-                        extract_static = get_numeric_value(f'F{current_row + 10}', sheet)
-                    
-                    # Set makeup air and supply static based on model having 'F'
-                    has_fresh_air = 'F' in model
-                    makeup_air = get_numeric_value(f'I{current_row + 10}', sheet) if has_fresh_air else '-'
-                    supply_static = get_numeric_value(f'J{current_row + 10}', sheet) if has_fresh_air else '-'
-                    
-                    # Create base canopy data with required fields
-                    canopy_data = {
-                        'item_number': item_number,
-                        'configuration': get_cell_value(f'C{current_row + 2}', sheet),
-                        'model': model,
-                        'width': width,
-                        'length': length,
-                        'height': height,
-                        'section': section,
-                        'flowrate': flowrate,
-                        'extract_static': extract_static,
-                        'canopy_price': canopy_price,
-                        'additional_costs': additional_costs,
-                        'total_price': total_price,
-                        'p182_value': get_numeric_value('P182', sheet),
-                        'lights': lights,
-                        'makeup_air': makeup_air,
-                        'supply_static': supply_static,
-                        # Add wall cladding data
-                        'wallCladding': get_cell_value(f'C{current_row + 7}', sheet),  # C19 for first canopy
-                        'cladding_length': get_numeric_value(f'D{current_row + 7}', sheet),
-                        'cladding_height': get_numeric_value(f'E{current_row + 7}', sheet),
-                        'cladding_desc': parse_cladding_description(get_cell_value(f'F{current_row + 7}', sheet))
-                    }
-                    
-                    # Add lights if they exist
-                    if lights:
-                        canopy_data['lights'] = lights
-                        if light_quantity:
-                            canopy_data['light_quantity'] = light_quantity
-                    
-                    # Handle special works
-                    special_works = {
-                        get_cell_value(f'C{current_row + 4}', sheet): get_numeric_value(f'D{current_row + 4}', sheet),
-                        get_cell_value(f'C{current_row + 5}', sheet): get_numeric_value(f'D{current_row + 5}', sheet)
-                    }
-                    # Only include non-empty special works with non-zero quantities
-                    special_works = {k: v for k, v in special_works.items() 
-                                    if k and k != "SELECT WORKS" and v}
-                    if special_works:
-                        canopy_data['specialWorks'] = special_works
-                    
-                    # Handle wall cladding
-                    wall_cladding = get_cell_value(f'C{current_row + 7}', sheet)
-                    if wall_cladding:
-                        canopy_data['wallCladding'] = wall_cladding
-                        cladding_length = get_numeric_value(f'D{current_row + 7}', sheet)
-                        cladding_height = get_numeric_value(f'E{current_row + 7}', sheet)
-                        canopy_data['cladding_length'] = cladding_length
-                        canopy_data['cladding_height'] = cladding_height
-                        cladding_desc = parse_cladding_description(get_cell_value(f'F{current_row + 7}', sheet))
-                        if cladding_desc:
-                            canopy_data['cladding_desc'] = cladding_desc
-                    
-                    # Handle CMWI/CMWF specific fields
-                    if model in ['CMWI', 'CMWF']:
-                        control_panel = get_cell_value(f'C{current_row + 13}', sheet)
-                        ww_pods = get_cell_value(f'C{current_row + 14}', sheet)
-                        ww_qty = get_numeric_value(f'D{current_row + 14}', sheet)
-                        pipework = get_cell_value(f'C{current_row + 15}', sheet)
-                        
-                        if control_panel:
-                            canopy_data['control_panel'] = control_panel
-                        if ww_pods:
-                            canopy_data['WW_pods'] = ww_pods
-                            canopy_data['WW_pods_quantity'] = ww_qty
-                        if pipework:
-                            canopy_data['pipework'] = pipework
-                    
-                    floor_data['canopies'].append(canopy_data)
-                
-                current_row += 17
-            
-            # Only add floors that have valid canopies
-            if floor_data['canopies']:
-                kitchen['floors'].append(floor_data)
-                # Store canopy prices for this sheet (with safe access)
-                canopy_prices[sheet_name] = [
-                    get_numeric_value(f'P{row}', sheet)  # Get price from P12 (base canopy price)
-                    for row in range(12, sheet.max_row, 17)  # Step through canopy rows
-                    if (get_cell_value(f'B{row}', sheet) and 
-                        get_cell_value(f'D{row + 2}', sheet) and 
-                        not should_skip_reference(get_cell_value(f'B{row}', sheet)))  # Check reference number
-                ]
-    
-    # Remove any kitchens that have no floors with canopies
-    kitchen_info = [kitchen for kitchen in kitchen_info if kitchen['floors']]
-    
-    # Calculate totals from individual sheets
-    total_job_price = 0
-    total_costs = 0
+            # Rest of your existing code...
 
-    for sheet_name in wb_data.sheetnames:
-        if sheet_name.startswith('CANOPY') and sheet_name != 'CANOPY':
-            sheet = wb_data[sheet_name]
-            
-            # Get totals directly from N9 and K9 of each sheet
-            sheet_total_price = get_numeric_value('N9', sheet)  # Total selling price from N9
-            sheet_total_cost = get_numeric_value('K9', sheet)   # Total cost from K9
-            
-            # Add to overall totals
-            total_job_price += sheet_total_price
-            total_costs += sheet_total_cost
-            
-            # Debug output
-            st.write(f"Sheet {sheet_name} totals:")
-            st.write(f"- Total Price (N9): {sheet_total_price}")
-            st.write(f"- Total Cost (K9): {sheet_total_cost}")
-
-    # Write the calculated totals to JOB TOTAL sheet
-    if 'JOB TOTAL' in wb_data.sheetnames:
-        job_total_sheet = wb_data['JOB TOTAL']
-        job_total_sheet['S16'] = total_costs      # Write sum of all K9s
-        job_total_sheet['T16'] = total_job_price  # Write sum of all N9s
-
-    # Round prices to integers using ceiling when adding to extracted_data
-    extracted_data = {
+    # Add to extracted data
+    return {
         'kitchens': kitchen_info,
         'p182_values': p182_values,
+        'n9_values': n9_values,
         'canopy_prices': canopy_prices,
-        'total_job_price': math.ceil(total_job_price),  # Ceiling round
-        'total_costs': math.ceil(total_costs)           # Ceiling round
+        'total_job_price': math.ceil(total_job_price),
+        'total_costs': math.ceil(total_costs)
     }
-
-    # Also ceiling round prices in kitchen_info
-    for kitchen in kitchen_info:
-        for floor in kitchen['floors']:
-            floor['total_price'] = math.ceil(floor['total_price'])
-            floor['total_cost'] = math.ceil(floor['total_cost'])
-            floor['p182_value'] = math.ceil(floor['p182_value'])
-            
-            for canopy in floor['canopies']:
-                canopy['total_price'] = math.ceil(canopy['total_price'])
-                canopy['canopy_price'] = math.ceil(canopy['canopy_price'])
-                if 'additional_costs' in canopy:
-                    canopy['additional_costs'] = math.ceil(canopy['additional_costs'])
-                canopy['p182_value'] = math.ceil(canopy['p182_value'])
-    
-    return extracted_data
 
 def parse_cladding_description(desc):
     """Extract wall selections from cladding description"""

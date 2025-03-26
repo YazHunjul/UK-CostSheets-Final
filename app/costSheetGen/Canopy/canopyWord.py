@@ -23,16 +23,12 @@ def generate_word(context, genInfo):
         ref_num = genInfo.get('projectNum', '')
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
-<<<<<<< HEAD
         # Get just the first name of the customer
         full_name = genInfo.get('customer', '')
-        first_name = full_name.split()[0] if full_name else ''  # Take first word as first name
-        genInfo['customer'] = first_name  # Update customer to just first name
+        first_name = full_name.split()[0] if full_name else ''
+        genInfo['customer'] = first_name
 
-        template_path = '/Users/yazan/Desktop/Efficiency/UK-CostSheets-Final/app/costSheetGen/costSheetResources/costSheet_canopy.docx'
-=======
-        template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
->>>>>>> 74c3922b8157d83ba4464e01abbfc30bf30c2903
+        template_path = TEMPLATES['WORD']
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")
