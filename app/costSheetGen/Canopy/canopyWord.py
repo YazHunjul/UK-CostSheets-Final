@@ -28,7 +28,7 @@ def generate_word(context, genInfo):
         first_name = full_name.split()[0] if full_name else ''
         genInfo['customer'] = first_name
 
-        template_path = TEMPLATES['WORD']
+        template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")
