@@ -617,85 +617,7 @@ def main(genInfo):
 
     # Upload section
     st.markdown("### Step 2: Upload Processed Excel")
-    uploaded_file = st.file_uploader("Upload Excel file after calculations", type=['xlsx'])
-    
-    if uploaded_file is not None:
-        try:
-            st.write("Loading Excel file...")
-            excel_data = BytesIO(uploaded_file.getvalue())
-            
-            # Load template workbook for dropdowns
-            template_path = TEMPLATES['EXCEL']
-            template_wb = openpyxl.load_workbook(template_path)
-            
-            # Load workbooks for processing
-            wb_data_with_formulas = openpyxl.load_workbook(excel_data)
-            excel_data.seek(0)
-            wb_data = openpyxl.load_workbook(excel_data, data_only=True)
-            
-            # Extract data and update totals as before
-            extracted_data = extract_data_from_excel(wb_data)
-            
-            # Update JOB TOTAL and general info
-            if 'JOB TOTAL' in wb_data_with_formulas.sheetnames:
-                job_total_sheet = wb_data_with_formulas['JOB TOTAL']
-                
-                # Write totals
-                job_total_sheet['S16'] = extracted_data['total_costs']
-                job_total_sheet['T16'] = extracted_data['total_job_price']
-                
-                # Write general info
-                job_total_sheet['C3'] = genInfo.get('projectNum', '')
-                job_total_sheet['C5'] = genInfo.get('customer', '')
-                job_total_sheet['C7'] = genInfo.get('combined_initials', '')
-                job_total_sheet['G3'] = genInfo.get('projectName', '')
-                job_total_sheet['G5'] = genInfo.get('location', '')
-                job_total_sheet['G7'] = genInfo.get('date', '')
-            
-            # Copy dropdowns from template to modified workbook
-            copy_dropdowns(template_wb, wb_data_with_formulas)
-            
-            # Save the modified workbook
-            modified_excel = BytesIO()
-            wb_data_with_formulas.save(modified_excel)
-            modified_excel.seek(0)
-            
-            # Generate Word document
-            word_file = CW.generate_word(extracted_data, genInfo)
-            
-            # Create ZIP with modified Excel file
-            zip_buffer = BytesIO()
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # Add modified Excel file
-                zip_file.writestr(
-                    f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx",
-                    modified_excel.getvalue()  # Use modified Excel file
-                )
-                
-                # Add Word file
-                zip_file.writestr(
-                    f"{genInfo['projectNum']} Quotation.docx",
-                    word_file.getvalue()
-                )
-            
-            # Provide download button for ZIP file
-            st.download_button(
-                label="⬇️ Download ZIP (Excel + Word)",
-                data=zip_buffer.getvalue(),
-                file_name=f"{genInfo['projectNum']} Documents.zip",
-                mime="application/zip"
-            )
-            
-            # Optional: Display some summary
-            st.write("### Summary")
-            st.write(f"Total Job Price: £{extracted_data['total_job_price']:,.2f}")
-            for kitchen in extracted_data['kitchens']:
-                st.write(f"\n{kitchen['kitchen_name']}")
-                for floor in kitchen['floors']:
-                    st.write(f"  {floor['floor_name']}: {len(floor['canopies'])} canopies")
-            
-        except Exception as e:
-            st.error(f"Error processing files: {str(e)}")
+    process_uploaded_excel(kitchen_info, genInfo)
 
     # Use the names from general_info
   
@@ -947,140 +869,64 @@ def load_form_data(json_file):
         st.error(f"Error loading JSON data: {str(e)}")
         return [], {}
 
-# In the main UI section:
-st.markdown("### Save/Load Project Data")
-col1, col2 = st.columns(2)
-
-# Save current form data
-with col1:
-    if st.button("Save Project Data"):
-        json_buffer = save_form_data(kitchen_info, genInfo)
-        st.download_button(
-            label="⬇️ Download Project Data",
-            data=json_buffer.getvalue(),
-            file_name=f"{genInfo['projectNum']}_project_data.json",
-            mime="application/json"
-        )
-
-# Load saved form data
-with col2:
-    uploaded_json = st.file_uploader("Load Project Data", type=['json'])
-    if uploaded_json:
-        loaded_kitchen_info, loaded_genInfo = load_form_data(uploaded_json)
-        if loaded_kitchen_info and loaded_genInfo:
-            # Auto-fill form fields
-            for key, value in loaded_genInfo.items():
-                if key in st.session_state:
-                    st.session_state[key] = value
-            
-            # Set kitchen count
-            st.session_state['num_kitchens'] = len(loaded_kitchen_info)
-            
-            # Fill kitchen data
-            for i, kitchen in enumerate(loaded_kitchen_info):
-                st.session_state[f'kitchen_name_{i}'] = kitchen['kitchen_name']
-                st.session_state[f'floors_input_{i}'] = len(kitchen['floors'])
-                
-                for j, floor in enumerate(kitchen['floors']):
-                    st.session_state[f'floor_name_{i}_{j}'] = floor['floor_name']
-                    st.session_state[f'canopies_input_{i}_{j}'] = len(floor['canopies'])
-                    
-                    for k, canopy in enumerate(floor['canopies']):
-                        for field, value in canopy.items():
-                            st.session_state[f'{field}_{i}_{j}_{k}'] = value
-
-# Upload section for both files
-st.markdown("### Step 2: Upload Files")
-col1, col2 = st.columns(2)
-
-with col1:
-    uploaded_json = st.file_uploader("Upload Project Data (Optional)", type=['json'])
-
-with col2:
-    uploaded_excel = st.file_uploader("Upload Excel file", type=['xlsx'])
-
-if uploaded_excel:
-    if uploaded_json:
-        # Load JSON data first
-        loaded_kitchen_info, loaded_genInfo = load_form_data(uploaded_json)
-        # Update genInfo with loaded data
-        genInfo.update(loaded_genInfo)
+def process_uploaded_excel(kitchen_info, genInfo):
+    """Handle uploaded Excel processing"""
+    uploaded_file = st.file_uploader("Upload Excel file", type=['xlsx'])
     
-    # Process Excel file as before
-    try:
-        st.write("Loading files...")
-        excel_data = BytesIO(uploaded_file.getvalue())
-        
-        # Load template workbook for dropdowns
-        template_path = TEMPLATES['EXCEL']
-        template_wb = openpyxl.load_workbook(template_path)
-        
-        # Load workbooks for processing
-        wb_data_with_formulas = openpyxl.load_workbook(excel_data)
-        excel_data.seek(0)
-        wb_data = openpyxl.load_workbook(excel_data, data_only=True)
-        
-        # Extract data and update totals as before
-        extracted_data = extract_data_from_excel(wb_data)
-        
-        # Update JOB TOTAL and general info
-        if 'JOB TOTAL' in wb_data_with_formulas.sheetnames:
-            job_total_sheet = wb_data_with_formulas['JOB TOTAL']
+    if uploaded_file is not None:
+        try:
+            # Extract data from Excel
+            excel_data = BytesIO(uploaded_file.getvalue())
+            wb_data = load_workbook(excel_data, data_only=True)
             
-            # Write totals
-            job_total_sheet['S16'] = extracted_data['total_costs']
-            job_total_sheet['T16'] = extracted_data['total_job_price']
+            # Extract all data
+            extracted_data = extract_data_from_excel(wb_data)
             
-            # Write general info
-            job_total_sheet['C3'] = genInfo.get('projectNum', '')
-            job_total_sheet['C5'] = genInfo.get('customer', '')
-            job_total_sheet['C7'] = genInfo.get('combined_initials', '')
-            job_total_sheet['G3'] = genInfo.get('projectName', '')
-            job_total_sheet['G5'] = genInfo.get('location', '')
-            job_total_sheet['G7'] = genInfo.get('date', '')
-        
-        # Copy dropdowns from template to modified workbook
-        copy_dropdowns(template_wb, wb_data_with_formulas)
-        
-        # Save the modified workbook
-        modified_excel = BytesIO()
-        wb_data_with_formulas.save(modified_excel)
-        modified_excel.seek(0)
-        
-        # Generate Word document
-        word_file = CW.generate_word(extracted_data, genInfo)
-        
-        # Create ZIP with modified Excel file
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Add modified Excel file
-            zip_file.writestr(
-                f"{genInfo['projectNum']} Cost Sheet {genInfo['date']}.xlsx",
-                modified_excel.getvalue()  # Use modified Excel file
-            )
+            # Generate Word document
+            word_file = CW.generate_word(extracted_data, genInfo)
+            if word_file is None:
+                st.error("Failed to generate Word document")
+                return
             
-            # Add Word file
-            zip_file.writestr(
-                f"{genInfo['projectNum']} Quotation.docx",
-                word_file.getvalue()
-            )
-        
-        # Provide download button for ZIP file
-        st.download_button(
-            label="⬇️ Download ZIP (Excel + Word)",
-            data=zip_buffer.getvalue(),
-            file_name=f"{genInfo['projectNum']} Documents.zip",
-            mime="application/zip"
-        )
-        
-        # Optional: Display some summary
-        st.write("### Summary")
-        st.write(f"Total Job Price: £{extracted_data['total_job_price']:,.2f}")
-        for kitchen in extracted_data['kitchens']:
-            st.write(f"\n{kitchen['kitchen_name']}")
-            for floor in kitchen['floors']:
-                st.write(f"  {floor['floor_name']}: {len(floor['canopies'])} canopies")
+            # Create ZIP package
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w') as zf:
+                # Add Excel file
+                zf.writestr(uploaded_file.name, uploaded_file.getvalue())
                 
-    except Exception as e:
-        st.error(f"Error processing files: {str(e)}")
+                # Add Word file
+                zf.writestr("Halton Quotation.docx", word_file.getvalue())
+            
+            # Offer download
+            st.download_button(
+                label="⬇️ Download Package (Excel + Word)",
+                data=zip_buffer.getvalue(),
+                file_name=f"{genInfo['projectNum']}_Package.zip",
+                mime="application/zip"
+            )
+            
+            # Display summary
+            display_summary(extracted_data)
+            
+        except Exception as e:
+            st.error(f"Error processing files: {str(e)}")
+
+def display_summary(data):
+    """Display summary of extracted data"""
+    st.write("### Summary")
+    total_project = 0
+    for kitchen in data['kitchens']:
+        st.write(f"\n{kitchen['kitchen_name']}")
+        kitchen_total = 0
+        for floor in kitchen['floors']:
+            n9_total = floor.get('n9_value', 0)
+            p182_total = floor.get('p182_value', 0)
+            st.write(f"  {floor['floor_name']}:")
+            st.write(f"    - {len(floor['canopies'])} canopies")
+            st.write(f"    - Base Price (N9): £{n9_total:,}")
+            st.write(f"    - Total Price (P182): £{p182_total:,}")
+            kitchen_total += p182_total
+        st.write(f"Kitchen Total: £{kitchen_total:,}")
+        total_project += kitchen_total
+    st.write(f"\nProject Total: £{total_project:,}")
   

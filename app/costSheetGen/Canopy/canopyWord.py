@@ -9,106 +9,48 @@ import toml
 from ..config import TEMPLATES
 
 def generate_word(context, genInfo):
-    """
-    Generates a Word document using the provided context.
-
-    Args:
-        context (dict): A dictionary containing the data to render in the Word template.
-
-    Returns:
-        BytesIO: The generated Word document as a BytesIO object.
-    """
+    """Generate Word document from template"""
     try:
-        # Format the reference number for the Word document
+        # Format reference number
         ref_num = genInfo.get('projectNum', '')
         genInfo['referenceNum'] = f"{ref_num}/{genInfo['combined_initials']}"
 
-        # Get just the first name of the customer
+        # Get first name
         full_name = genInfo.get('customer', '')
         first_name = full_name.split()[0] if full_name else ''
         genInfo['customer'] = first_name
 
+        # Get template path
         template_path = 'app/costSheetGen/costSheetResources/costSheet_canopy.docx'
-        
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Word template not found at: {template_path}")
-            
-        # Load the Word template
+
+        # Load template
         template = DocxTemplate(template_path)
+        if template is None:
+            raise ValueError("Failed to load Word template")
 
-        # Extract and process canopy data grouped by kitchens and floors
-        grouped_canopy_data = extract_canopy_info_grouped(context)
-        cmwi_data = extract_cmwi_canopies(context)
-        scope_work = scope_of_works(context)
-        wall_cladding_data = get_wall_cladding(context)
+        # Process data
+        grouped_data = extract_canopy_info_grouped(context)
+        if not grouped_data:
+            raise ValueError("No canopy data available")
 
-        print("DEBUG - Context data:", context)  # Debug print
-        print("DEBUG - Wall cladding data:", wall_cladding_data)  # Debug print
-        print("DEBUG - Scope of work:", scope_work)  # Debug print
-
-        # Validate data
-        if not grouped_canopy_data:
-            raise ValueError("No grouped canopy data available.")
-        if not cmwi_data:
-            cmwi_data = []  # Ensure it's at least an empty list
-        if not scope_work:
-            scope_work = []
-
-        # Use the kitchen_totals passed from canopyMain.py
-        kitchen_totals = context.get('kitchen_totals', {})
-        # Round each kitchen total
-        kitchen_totals = {k: math.ceil(v) for k, v in kitchen_totals.items()}
-        grand_total = math.ceil(sum(kitchen_totals.values()))
-
-        # Get the totals from context
-        total_cost = math.ceil(sum(kitchen_totals.values()))  # Total from T16
-        total_k9_cost = context.get('total_k9_cost', 0)  # Total from S16
-
-        # Add pricing information to genInfo
+        # Update context
         genInfo.update({
-            'kitchen_totals': kitchen_totals,  # Already rounded when extracted from Excel
-            'grand_total': math.ceil(sum(kitchen_totals.values())),
-            'total_job_price': total_cost,
-            'total_cost': total_k9_cost
+            'grouped_canopy_data': grouped_data,
+            'total_job_price': context.get('total_job_price', 0),
+            'total_costs': context.get('total_costs', 0)
         })
 
-        # Round prices in grouped_canopy_data
-        for kitchen_name, kitchen in grouped_canopy_data.items():
-            for floor_name, floor_data in kitchen.items():
-                for canopy in floor_data['canopies']:
-                    if 'total_price' in canopy:
-                        canopy['total_price'] = math.ceil(canopy['total_price'])
-                    if 'cladding_price' in canopy:
-                        canopy['cladding_price'] = math.ceil(canopy['cladding_price'])
-
-        # Update genInfo with rounded data
-        genInfo["grouped_canopy_data"] = grouped_canopy_data
-        genInfo["cmwi_canopies"] = cmwi_data
-        genInfo["scope_of_work"] = scope_work
-        if wall_cladding_data:
-            genInfo["wall_cladding_info"] = wall_cladding_data
-            print("Adding wall cladding to template")
-        else:
-            genInfo["wall_cladding_info"] = None
-            print("No wall cladding data to add")
-
-        print("DEBUG - Final genInfo:", genInfo)  # Debug print
-
-        # Render the template with the given context
+        # Render template
         template.render(genInfo)
 
-        # Save to BytesIO
+        # Save to buffer
         word_buffer = BytesIO()
         template.save(word_buffer)
-        
-        # Important: Seek to start of buffer
         word_buffer.seek(0)
         
-        # Read the entire content into a new buffer to ensure it's complete
-        final_buffer = BytesIO(word_buffer.read())
-        word_buffer.close()
-        
-        return final_buffer
+        return word_buffer
 
     except Exception as e:
         st.error(f"Error generating Word document: {str(e)}")
