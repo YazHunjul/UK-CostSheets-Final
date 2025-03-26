@@ -751,6 +751,8 @@ def extract_data_from_excel(wb):
     p182_values = {}  # Store P182 values for each sheet
     n9_values = {}    # Store N9 values for each sheet
     canopy_prices = {}  # Store canopy prices for each sheet
+    total_job_price = 0  # Initialize total_job_price
+    total_costs = 0      # Initialize total_costs
     
     def get_numeric_value(cell_ref, sheet=None, default=0):
         """Get numeric value from cell, handling various formats"""
@@ -771,9 +773,15 @@ def extract_data_from_excel(wb):
             p182_values[sheet_name] = get_numeric_value('P182', sheet)
             n9_values[sheet_name] = get_numeric_value('N9', sheet)
             
-            # Rest of your existing code...
+            # Extract canopy data
+            # ... rest of your existing code ...
 
-    # Add to extracted data
+        elif sheet_name == 'JOB TOTAL':
+            job_total_sheet = wb[sheet_name]
+            total_job_price = get_numeric_value('T16', job_total_sheet)
+            total_costs = get_numeric_value('S16', job_total_sheet)
+
+    # Return extracted data
     return {
         'kitchens': kitchen_info,
         'p182_values': p182_values,
