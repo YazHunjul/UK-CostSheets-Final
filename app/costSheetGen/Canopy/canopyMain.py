@@ -769,12 +769,46 @@ def extract_data_from_excel(wb):
         if sheet_name.startswith('CANOPY - '):
             sheet = wb[sheet_name]
             
+            # Get kitchen and floor names from sheet
+            full_kitchen_name = sheet['Z1'].value if sheet['Z1'].value else ''
+            full_floor_name = sheet['Z2'].value if sheet['Z2'].value else ''
+            
             # Store P182 and N9 values for this sheet
             p182_values[sheet_name] = get_numeric_value('P182', sheet)
             n9_values[sheet_name] = get_numeric_value('N9', sheet)
             
+            # Find or create kitchen
+            kitchen = next((k for k in kitchen_info if k['kitchen_name'] == full_kitchen_name), None)
+            if not kitchen:
+                kitchen = {'kitchen_name': full_kitchen_name, 'floors': []}
+                kitchen_info.append(kitchen)
+            
+            # Create floor data
+            floor_data = {
+                'floor_name': full_floor_name,
+                'canopies': [],
+                'n9_value': n9_values[sheet_name],
+                'p182_value': p182_values[sheet_name]
+            }
+            
             # Extract canopy data
-            # ... rest of your existing code ...
+            current_row = 12
+            while current_row < sheet.max_row:
+                ref_num = sheet[f'B{current_row}'].value
+                if ref_num:
+                    canopy_data = {
+                        'itemNum': ref_num,
+                        'configuration': sheet[f'C{current_row + 2}'].value,
+                        'model': sheet[f'D{current_row + 2}'].value,
+                        'price': get_numeric_value(f'P{current_row}', sheet)
+                    }
+                    floor_data['canopies'].append(canopy_data)
+                current_row += 17
+            
+            # Add floor to kitchen if it has canopies
+            if floor_data['canopies']:
+                kitchen['floors'].append(floor_data)
+                canopy_prices[sheet_name] = [c['price'] for c in floor_data['canopies']]
 
         elif sheet_name == 'JOB TOTAL':
             job_total_sheet = wb[sheet_name]
